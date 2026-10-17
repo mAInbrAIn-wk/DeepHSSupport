@@ -168,6 +168,7 @@ def build_semester_sequence_tensor(
     sem_agg['gpa_prev'] = sem_agg.groupby('studierenden_id')['gpa_clean'].shift(1).fillna(3.0)
     sem_agg['gpa_cum'] = sem_agg.groupby('studierenden_id')['gpa_clean'].expanding().mean().reset_index(drop=True)
     sem_agg['gpa_cum_vorher'] = sem_agg.groupby('studierenden_id')['gpa_cum'].shift(1).fillna(3.0)
+    sem_agg['is_first_semester'] = (sem_agg['fachsemester'] == 1).astype(float)
 
     sem_agg['fach_supp_count'] = sem_agg['support_glz_fachlich']
     sem_agg['uebf_supp_count'] = sem_agg['support_glz_ueberfachlich']
@@ -211,6 +212,7 @@ def build_semester_sequence_tensor(
                 feature_names.extend(['fails_prev', 'delta_cp_prev', 'cp_rueckstand_vorher', 'sem_cp_attempted'])
                 if not gradeblind:
                     feature_names.append('gpa_prev')
+            feature_names.append('is_first_semester')
 
         feature_names.extend(['fach_supp_count', 'uebf_supp_count'])
         if not realistic:
@@ -289,6 +291,8 @@ def build_semester_sequence_tensor(
             if not gradeblind:
                 X_seq[v_i, v_t, feature_names.index('gpa_prev')] = sem_agg.loc[valid_mask, 'gpa_prev'].values
         X_seq[v_i, v_t, feature_names.index('sem_cp_attempted')] = sem_agg.loc[valid_mask, 'sem_cp_attempted'].values
+        if 'is_first_semester' in feature_names:
+            X_seq[v_i, v_t, feature_names.index('is_first_semester')] = sem_agg.loc[valid_mask, 'is_first_semester'].values
 
     if 'fach_supp_count' in feature_names:
         X_seq[v_i, v_t, feature_names.index('fach_supp_count')] = sem_agg.loc[valid_mask, 'fach_supp_count'].values
@@ -567,6 +571,8 @@ def build_semester_panel_df(
 
     df_pruefungen['cp_earned'] = np.where(df_pruefungen['bestanden'], df_pruefungen['cp'], 0)
     df_pruefungen['is_fail'] = np.where(~df_pruefungen['bestanden'], 1, 0)
+    df_pruefungen['is_zweitversuch'] = (df_pruefungen['versuch'] == 2).astype(int)
+    df_pruefungen['is_drittversuch'] = (df_pruefungen['versuch'] >= 3).astype(int)
 
     pr_sem = df_pruefungen.groupby(['studierenden_id', 'fachsemester']).agg({
         'support_glz_fachlich': 'sum',
@@ -574,12 +580,21 @@ def build_semester_panel_df(
         'support_glz_psychosozial': 'sum',
         'cp_earned': 'sum',
         'is_fail': 'sum',
+        'is_zweitversuch': 'sum',
+        'is_drittversuch': 'sum',
+        'versuch': 'max',
+        'schwierigkeit': 'mean',
         'note': 'mean',
         'hidden_motivation': 'mean',
         'hidden_soziale_integration': 'mean',
         'hidden_erwartete_note': 'mean',
         'hidden_overload': 'mean'
-    }).reset_index().sort_values(['studierenden_id', 'fachsemester']).reset_index(drop=True)
+    }).reset_index().rename(columns={
+        'is_zweitversuch': 'n_zweitversuche',
+        'is_drittversuch': 'n_drittversuche',
+        'versuch': 'max_versuch',
+        'schwierigkeit': 'mean_schwierigkeit',
+    }).sort_values(['studierenden_id', 'fachsemester']).reset_index(drop=True)
 
     pr_sem['t_start'] = pr_sem['fachsemester'] - 1
     pr_sem['t_stop'] = pr_sem['fachsemester']
@@ -593,6 +608,7 @@ def build_semester_panel_df(
     pr_sem['fails_prev'] = pr_sem.groupby('studierenden_id')['is_fail'].shift(1).fillna(0)
     pr_sem['delta_cp_prev'] = pr_sem.groupby('studierenden_id')['cp_earned'].shift(1).fillna(0.0)
     pr_sem['gpa_prev'] = pr_sem.groupby('studierenden_id')['note_clean'].shift(1).fillna(3.0)
+    pr_sem['is_first_semester'] = (pr_sem['fachsemester'] == 1).astype(float)
     pr_sem['cp_rueckstand'] = np.maximum(0.0, (pr_sem['fachsemester'] - 1) * 30.0 - pr_sem['cum_cp_vorher'])
 
     pr_sem['fach_supp_count'] = pr_sem['support_glz_fachlich']
@@ -603,9 +619,10 @@ def build_semester_panel_df(
     pr_sem['psych_supp_active'] = pr_sem['support_glz_psychosozial']
 
     if 'hidden_motivation' in pr_sem.columns:
-        pr_sem['hidden_motivation_prev'] = pr_sem.groupby('studierenden_id')['hidden_motivation'].shift(1).fillna(0.5)
-        pr_sem['hidden_soziale_integration_prev'] = pr_sem.groupby('studierenden_id')['hidden_soziale_integration'].shift(1).fillna(0.5)
-        pr_sem['hidden_erwartete_note_prev'] = pr_sem.groupby('studierenden_id')['hidden_erwartete_note'].shift(1).fillna(3.0)
+        pr_sem['hidden_motivation_prev'] = pr_sem.groupby('studierenden_id')['hidden_motivation'].shift(1)
+        pr_sem['hidden_soziale_integration_prev'] = pr_sem.groupby('studierenden_id')['hidden_soziale_integration'].shift(1)
+        # In engine.py wird hidden_erwartete_note VOR dem Prüfungs-Update geloggt (prä-interventionell in Semester t)
+        pr_sem['hidden_erwartete_note_prev'] = pr_sem['hidden_erwartete_note'].fillna(3.0)
         pr_sem['hidden_overload_prev'] = pr_sem.groupby('studierenden_id')['hidden_overload'].shift(1).fillna(0.0)
 
     df_abschluesse['is_dropout'] = df_abschluesse['status'].str.strip().str.lower().isin(['abgebrochen', 'exmatrikuliert', 'zeitueberschreitung']).astype(int)
@@ -617,10 +634,23 @@ def build_semester_panel_df(
     for s_name in STUDIENGAENGE_LIST:
         df_abschluesse[f"stg_{s_name.replace(' ', '_')}"] = (df_abschluesse['stg_name'] == s_name).astype(float)
 
-    stud_cols = ['studierenden_id', 'status', 'is_dropout', 'is_grad', 'studiendauer_semester', 'hzb_note', 'hzb_typ_ord', 'stg_name', 'migrationshintergrund', 'erstakademiker', 'erwerbstaetigkeit_std', 'hidden_zeit_puffer'] + [f"stg_{s.replace(' ', '_')}" for s in STUDIENGAENGE_LIST]
+    stud_cols = [
+        'studierenden_id', 'status', 'is_dropout', 'is_grad', 'studiendauer_semester',
+        'hzb_note', 'hzb_typ_ord', 'stg_name', 'migrationshintergrund', 'erstakademiker',
+        'erwerbstaetigkeit_std', 'hidden_zeit_puffer',
+        'motivation_initial', 'soziale_integration_initial',
+    ] + [f"stg_{s.replace(' ', '_')}" for s in STUDIENGAENGE_LIST]
     stud_cols = [c for c in stud_cols if c in df_abschluesse.columns]
 
     panel_df = pr_sem.merge(df_abschluesse[stud_cols], on='studierenden_id', how='left')
+    if 'hidden_motivation_prev' in panel_df.columns:
+        if 'motivation_initial' in panel_df.columns:
+            panel_df['hidden_motivation_prev'] = panel_df['hidden_motivation_prev'].fillna(panel_df['motivation_initial'])
+        if 'soziale_integration_initial' in panel_df.columns:
+            panel_df['hidden_soziale_integration_prev'] = panel_df['hidden_soziale_integration_prev'].fillna(panel_df['soziale_integration_initial'])
+        panel_df['hidden_motivation_prev'] = panel_df['hidden_motivation_prev'].fillna(0.5)
+        panel_df['hidden_soziale_integration_prev'] = panel_df['hidden_soziale_integration_prev'].fillna(0.5)
+
     panel_df['event'] = np.where((panel_df['fachsemester'] == panel_df['studiendauer_semester']) & (panel_df['is_dropout'] == 1), 1, 0)
     panel_df['competing_event'] = np.where(
         panel_df['fachsemester'] == panel_df['studiendauer_semester'],
@@ -631,7 +661,7 @@ def build_semester_panel_df(
 
     if inside_view:
         feature_cols: List[str] = ['hzb_note'] + [f"stg_{s.replace(' ', '_')}" for s in STUDIENGAENGE_LIST[1:]]
-        feature_cols.extend(['erwerbstaetigkeit_std'])
+        feature_cols.extend(['erwerbstaetigkeit_std', 'n_zweitversuche', 'n_drittversuche', 'max_versuch', 'mean_schwierigkeit'])
         feature_cols.extend(['fach_supp_count', 'uebf_supp_count', 'psych_supp_count'])
         if 'hidden_motivation_prev' in panel_df.columns:
             feature_cols.extend([
@@ -653,8 +683,12 @@ def build_semester_panel_df(
                 feature_cols.extend(['cum_fails', 'cum_cp', 'cp_rueckstand'])
             else:
                 feature_cols.extend(['fails_prev', 'delta_cp_prev', 'cp_rueckstand'])
+            feature_cols.extend(['n_zweitversuche', 'n_drittversuche', 'max_versuch'])
+            if not realistic:
+                feature_cols.append('mean_schwierigkeit')
             if not gradeblind:
                 feature_cols.append('gpa_prev')
+            feature_cols.append('is_first_semester')
 
         feature_cols.extend(['fach_supp_count', 'uebf_supp_count'])
         if not realistic:
@@ -882,8 +916,14 @@ def build_landmark_dataset(
         df_lm[f"stg_{s_name.replace(' ', '_')}"] = (df_lm['stg_name'] == s_name).astype(float)
 
     if target == 'abschlussnote':
+        if not graduates_only:
+            raise ValueError(
+                "build_landmark_dataset mit target='abschlussnote' erfordert graduates_only=True, "
+                "um keine fiktive Note (3.0) für Studienabbrecher zu imputieren."
+            )
         target_col = 'abschlussnote'
-        df_lm[target_col] = pd.to_numeric(df_lm['abschlussnote'], errors='coerce').fillna(3.0)
+        df_lm[target_col] = pd.to_numeric(df_lm['abschlussnote'], errors='coerce')
+        df_lm = df_lm.dropna(subset=[target_col]).copy().reset_index(drop=True)
     elif target == 'status':
         target_col = 'status'
     else:
@@ -934,3 +974,214 @@ def build_landmark_dataset(
     }
 
     return df_lm, feature_cols, target_col, feature_indices
+
+
+# =========================================================================
+# 5. NEXT-EXAM AUTOREGRESSIVE DATASET & CENTRALIZED SPLIT / SCALING HELPERS
+# =========================================================================
+def prepare_next_exam_dataset(
+    data_dir: Union[str, Path],
+    max_history_len: int = 30,
+    mode: str = 'standard',
+    temporal: str = 'prev',
+    gradeblind: bool = False,
+    blind: bool = False,
+    oracle: bool = False,
+    realistic: bool = False,
+    inside_view: bool = False,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Erstellt Paare von (Historie 1..k, Kontext k+1 -> Note k+1, Bestanden k+1)
+    für die autoregressiven Dual-Head Next-Exam Modelle (GRU & Transformer)
+    mit konsistenter Unterstützung für mode ('standard', 'gradeblind', 'realistic', 'oracle').
+    """
+    gradeblind, blind, oracle, realistic, inside_view = _resolve_modes(
+        mode, gradeblind, blind, oracle, realistic, inside_view
+    )
+    df_ab, df_pr = _load_raw_data(data_dir)
+
+    df_pr = df_pr.sort_values(['studierenden_id', 'pruefung_id']).reset_index(drop=True)
+    df_pr['bestanden_int'] = df_pr['bestanden'].astype(int)
+    df_pr['note_clean'] = np.where(
+        ~df_pr['bestanden'],
+        df_pr['note'].fillna(5.0),
+        df_pr['note'].fillna(3.0)
+    )
+
+    df_ab['hzb_ord'] = df_ab['hzb_typ'].map(HZB_ORDINAL_MAP).fillna(3.0)
+    demo_cols = ['hzb_note', 'hzb_ord']
+    if not realistic:
+        demo_cols.extend(['erwerbstaetigkeit_std', 'erstakademiker'])
+    demo_dict = df_ab.set_index('studierenden_id')[demo_cols].to_dict('index')
+
+    # Historien-Features (1..k)
+    hist_feats = ['versuch']
+    if not realistic:
+        hist_feats.append('schwierigkeit')
+    hist_feats.extend(['cp', 'bestanden_int'])
+    if not gradeblind:
+        hist_feats.append('note_clean')
+    hist_feats.extend([
+        'support_vorher_fachlich', 'support_vorher_ueberfachlich',
+        'support_glz_fachlich', 'support_glz_ueberfachlich',
+    ])
+    if not realistic:
+        hist_feats.extend(['support_vorher_psychosozial', 'support_glz_psychosozial'])
+    hist_feats.append('fachsemester')
+
+    if oracle and 'hidden_motivation' in df_pr.columns:
+        for h_col, default_val in [
+            ('hidden_motivation', 0.5),
+            ('hidden_soziale_integration', 0.5),
+            ('hidden_erwartete_note', 3.0),
+            ('hidden_overload', 0.0),
+        ]:
+            if h_col in df_pr.columns:
+                df_pr[h_col] = df_pr[h_col].fillna(default_val)
+                hist_feats.append(h_col)
+
+    # Kontext-Spalten für Prüfung k+1 (alle außer Zielvariablen bestanden_int & note_clean)
+    ctx_feat_indices = [
+        i for i, f in enumerate(hist_feats) if f not in ('bestanden_int', 'note_clean')
+    ]
+
+    X_hist_list, X_ctx_list, y_grade_list, y_pass_list, student_id_list = [], [], [], [], []
+    grouped = df_pr.groupby('studierenden_id', sort=False)
+    print(f"[FeatureBuilder] Erstelle Autoregressive Next-Exam Samples für {len(grouped)} Studierende (mode={mode}) ...")
+
+    for s_id, group in grouped:
+        demo = demo_dict.get(s_id, {})
+        demo_vec = [float(demo.get('hzb_note', 2.5)), float(demo.get('hzb_ord', 3.0))]
+        if not realistic:
+            demo_vec.extend([
+                float(demo.get('erwerbstaetigkeit_std', 0.0) or 0.0),
+                float(bool(demo.get('erstakademiker', False))),
+            ])
+
+        records = group[hist_feats].values.astype(np.float32)
+        notes = group['note_clean'].values.astype(np.float32)
+        passes = group['bestanden_int'].values.astype(np.float32)
+        n_exams = len(records)
+
+        for k in range(1, min(n_exams, 35)):
+            history = records[:k]
+            next_exam = records[k]
+
+            pad_seq = np.full((max_history_len, len(hist_feats)), PADDING_VALUE, dtype=np.float32)
+            hist_len = min(len(history), max_history_len)
+            pad_seq[:hist_len] = history[-hist_len:]
+
+            ctx = list(next_exam[ctx_feat_indices]) + demo_vec
+
+            X_hist_list.append(pad_seq)
+            X_ctx_list.append(ctx)
+            y_grade_list.append(notes[k])
+            y_pass_list.append(passes[k])
+            student_id_list.append(s_id)
+
+    X_hist = np.array(X_hist_list, dtype=np.float32)
+    X_ctx = np.array(X_ctx_list, dtype=np.float32)
+    y_grade = np.array(y_grade_list, dtype=np.float32)
+    y_pass = np.array(y_pass_list, dtype=np.float32)
+    student_ids = np.array(student_id_list)
+
+    print(f"[FeatureBuilder] Gesamtanzahl Next-Exam Samples: {len(X_hist):,}")
+    return X_hist, X_ctx, y_grade, y_pass, student_ids
+
+
+def split_student_ids(
+    student_ids: np.ndarray,
+    seed: int = 42,
+    test_size: float = 0.30,
+    val_ratio_of_temp: float = 0.50,
+    stratify: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Einheitlicher, leckagefreier 70/15/15 3-Wege-Split auf Studierenden-Ebene.
+    Gibt (train_ids, val_ids, test_ids) zurück.
+    """
+    from sklearn.model_selection import train_test_split
+
+    unique_studis = np.unique(student_ids)
+    if stratify is not None and len(stratify) == len(unique_studis):
+        tr_ids, temp_ids, _, temp_strat = train_test_split(
+            unique_studis, stratify, test_size=test_size, random_state=seed, stratify=stratify
+        )
+        va_ids, te_ids = train_test_split(
+            temp_ids, test_size=val_ratio_of_temp, random_state=seed, stratify=temp_strat
+        )
+    else:
+        tr_ids, temp_ids = train_test_split(unique_studis, test_size=test_size, random_state=seed)
+        va_ids, te_ids = train_test_split(temp_ids, test_size=val_ratio_of_temp, random_state=seed)
+    return tr_ids, va_ids, te_ids
+
+
+def scale_3d_sequences(
+    X_seq_or_splits: Union[np.ndarray, Dict[str, np.ndarray]],
+    tr_idx: Optional[np.ndarray] = None,
+    va_idx: Optional[np.ndarray] = None,
+    te_idx: Optional[np.ndarray] = None,
+    fit_key: str = "train",
+    padding_value: float = PADDING_VALUE,
+):
+    """
+    Skaliert 3D-Sequenztensoren (N, T, F) leckagefrei:
+    - Fittet StandardScaler ausschließlich auf nicht-gepaddeten Tokens des Trainings-Splits
+    - Transformiert alle angegebenen Splits über explizite Kopien (verhindert den NumPy Fancy-Indexing-Bug!)
+    - Lässt Padding-Werte (-99.0) unverändert.
+
+    Unterstützt drei Aufruf-Signaturen:
+      1. Dict-Modus: `scale_3d_sequences({"train": X_tr, "val": X_va, "test": X_te}, fit_key="train")`
+         -> gibt `(scaled_dict, scaler)` zurück.
+      2. 3-Array-Modus: `scale_3d_sequences(X_tr, X_va, X_te)` (wenn `tr_idx` ebenfalls 3D ist)
+         -> gibt `(X_tr_s, X_va_s, X_te_s, scaler)` zurück.
+      3. Index-Modus: `scale_3d_sequences(X_seq, tr_idx, va_idx, te_idx)`
+         -> gibt `(X_scaled, scaler)` zurück.
+    """
+    from sklearn.preprocessing import StandardScaler
+
+    scaler = StandardScaler()
+
+    def _fit_on_3d(arr_3d: np.ndarray):
+        vm = arr_3d[:, :, 0] != padding_value
+        if np.any(vm):
+            scaler.fit(arr_3d[vm])
+
+    def _transform_3d(arr_3d: np.ndarray) -> np.ndarray:
+        out = arr_3d.copy().astype(np.float32)
+        vm = out[:, :, 0] != padding_value
+        if np.any(vm):
+            out[vm] = scaler.transform(out[vm])
+        return out
+
+    # 1. Dict-Modus: {"train": X_tr, "val": X_va, ...}
+    if isinstance(X_seq_or_splits, dict):
+        fit_arr = X_seq_or_splits[fit_key].astype(np.float32)
+        _fit_on_3d(fit_arr)
+        scaled_dict = {
+            k: _transform_3d(v) if v is not None else None
+            for k, v in X_seq_or_splits.items()
+        }
+        return scaled_dict, scaler
+
+    # 2. 3-Array-Modus: (X_tr, X_va, X_te) jeweils als 3D-Array übergeben
+    if isinstance(tr_idx, np.ndarray) and tr_idx.ndim == 3:
+        X_tr = X_seq_or_splits.astype(np.float32)
+        _fit_on_3d(X_tr)
+        X_tr_s = _transform_3d(X_tr)
+        X_va_s = _transform_3d(tr_idx)
+        if isinstance(va_idx, np.ndarray) and va_idx.ndim == 3:
+            X_te_s = _transform_3d(va_idx)
+            return X_tr_s, X_va_s, X_te_s, scaler
+        return X_tr_s, X_va_s, scaler
+
+    # 3. Index-Modus: (X_seq, tr_idx, va_idx=None, te_idx=None)
+    X_scaled = X_seq_or_splits.copy().astype(np.float32)
+    _fit_on_3d(X_scaled[tr_idx])
+
+    splits = [s for s in (tr_idx, va_idx, te_idx) if s is not None]
+    for s_idx in splits:
+        X_scaled[s_idx] = _transform_3d(X_scaled[s_idx])
+
+    return X_scaled, scaler
+

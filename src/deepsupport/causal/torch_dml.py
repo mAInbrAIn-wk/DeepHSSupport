@@ -240,10 +240,10 @@ class PyTorchDMLSurvival:
         print(f"Confounder ({len(confounder_cols)}): {confounder_cols}")
         print(f"Treatments ({len(treatment_cols)}): {treatment_cols}")
 
-        # 2. Student-konsistenter 70/15/15 Split
-        unique_studis = np.array(panel_df["studierenden_id"].unique())
-        train_val_ids, test_ids = train_test_split(unique_studis, test_size=0.15, random_state=self.seed)
-        train_ids, val_ids = train_test_split(train_val_ids, test_size=0.1765, random_state=self.seed) # ~70/15/15
+        # 2. Student-konsistenter 70/15/15 Split (identisch zur übrigen Suite)
+        unique_studis = np.array(panel_df["studierenden_id"].unique().tolist())
+        train_ids, temp_ids = train_test_split(unique_studis, test_size=0.30, random_state=self.seed)
+        val_ids, test_ids = train_test_split(temp_ids, test_size=0.50, random_state=self.seed)
 
         df_train = panel_df[panel_df["studierenden_id"].isin(train_ids)].copy().reset_index(drop=True)
         df_val   = panel_df[panel_df["studierenden_id"].isin(val_ids)].copy().reset_index(drop=True)
@@ -314,28 +314,54 @@ class PyTorchDMLSurvival:
         y_tilde_test = y_test - y_hat_test_folds
 
         # =====================================================================
-        # STUFE 2: ANALYTISCHER ROBINSON ATE-SCHÄTZER (NEYMAN-ORTHOGONAL)
+        # STUFE 2a: MULTIVARIATER ROBINSON DML SCHÄTZER (NEYMAN-ORTHOGONAL)
         # =====================================================================
-        print("\n[Stufe 2a] Analytischer Robinson DML ATE-Schätzer (Neyman-Orthogonal) ...")
+        print("\n[Stufe 2a] Multivariater Robinson DML Schätzer (Neyman-Orthogonal, Cluster-Sandwich SE) ...")
+        n_treat = len(treatment_cols)
+        A_tilde_64 = A_tilde_train.astype(np.float64)
+        y_tilde_64 = y_tilde_train.astype(np.float64)
+
+        # Gemeinsame multivariate Normalgleichung: theta_hat = (A_tilde^T A_tilde)^(-1) A_tilde^T y_tilde
+        bread_inv = np.linalg.inv(A_tilde_64.T @ A_tilde_64 + 1e-8 * np.eye(n_treat))
+        theta_vec = bread_inv @ (A_tilde_64.T @ y_tilde_64)
+        eps_vec = y_tilde_64 - A_tilde_64 @ theta_vec
+
+        # Student-Clustered Liang-Zeger Sandwich-Kovarianzmatrix
+        _, cluster_inv_tr = np.unique(studis_tr, return_inverse=True)
+        n_clusters_tr = int(cluster_inv_tr.max()) + 1
+        score_rows = A_tilde_64 * eps_vec[:, None]  # (N_rows, K)
+        cluster_scores = np.zeros((n_clusters_tr, n_treat), dtype=np.float64)
+        np.add.at(cluster_scores, cluster_inv_tr, score_rows)
+        meat = (n_clusters_tr / max(n_clusters_tr - 1, 1)) * (cluster_scores.T @ cluster_scores)
+        cov_theta = bread_inv @ meat @ bread_inv
+        se_theta_vec = np.sqrt(np.maximum(np.diag(cov_theta), 1e-12))
+
+        # Baseline-Hazard-Rate (ohne Support im Intervall) zur Umrechnung von ATE auf implizites HR/RR
+        A_train_raw = df_train[treatment_cols].values.astype(np.float64)
+        untreated_mask = np.sum(A_train_raw, axis=1) == 0
+        baseline_y0 = float(np.mean(y_train[untreated_mask])) if np.any(untreated_mask) else float(np.mean(y_train))
+        baseline_y0 = max(baseline_y0, 1e-4)
+
         robinson_effects = {}
-        asymptotic_se = {}
+        causal_hr_estimates = {}
+        causal_hr_se = {}
+
         for k, treat_col in enumerate(treatment_cols):
-            a_res_tr = A_tilde_train[:, k]
-            denom = np.sum(a_res_tr ** 2)
-            if denom > 1e-8:
-                theta_hat = float(np.sum(a_res_tr * y_tilde_train) / denom)
-                # Neyman Sandwich Standard Error
-                eps = y_tilde_train - theta_hat * a_res_tr
-                var_hat = np.sum((eps ** 2) * (a_res_tr ** 2)) / (denom ** 2)
-                se_hat = float(np.sqrt(max(var_hat, 1e-12)))
-            else:
-                theta_hat = 0.0
-                se_hat = 0.0
+            theta_hat = float(theta_vec[k])
+            se_hat = float(se_theta_vec[k])
+            hr_robinson = float(max(0.05, 1.0 + theta_hat / baseline_y0))
+            hr_se_robinson = float(se_hat / baseline_y0)
 
             short_name = treat_col.replace("_supp_count", "").replace("support_glz_", "")
             robinson_effects[f"dml_ate_{short_name}"] = theta_hat
-            asymptotic_se[f"dml_ate_{short_name}"] = se_hat
-            print(f"  • {short_name.upper():<14}: ATE = {theta_hat:+.5f} | Asym-SE = {se_hat:.5f} | 95% CI: [{theta_hat - 1.96*se_hat:+.5f}, {theta_hat + 1.96*se_hat:+.5f}]")
+            robinson_effects[f"dml_ate_se_{short_name}"] = se_hat
+            robinson_effects[f"dml_robinson_hr_{short_name}"] = hr_robinson
+            causal_hr_estimates[f"hr_{short_name}"] = hr_robinson
+            causal_hr_se[f"hr_{short_name}"] = hr_se_robinson
+            print(
+                f"  • {short_name.upper():<14}: ATE = {theta_hat:+.5f} (SE={se_hat:.5f}) "
+                f"| Implied HR = {hr_robinson:.4f} (SE={hr_se_robinson:.4f})"
+            )
 
         # =====================================================================
         # STUFE 2b: NEURONALES DML DISCRETE-TIME HAZARD NETZWERK
@@ -379,7 +405,7 @@ class PyTorchDMLSurvival:
             dml_net.load_state_dict({k: v.to(self.device) for k, v in best_state.items()})
 
         # =====================================================================
-        # STUFE 3: KONTRAFAKTISCHE INFERENZ & BOOTSTRAP AUF TEST-SET
+        # STUFE 3: KONTRAFAKTISCHE INFERENZ & CLUSTER-BOOTSTRAP
         # =====================================================================
         print("\n[Stufe 3] Kausale Counterfactual-Inferenz auf Testkohorte ...")
         dml_net.eval()
@@ -390,8 +416,6 @@ class PyTorchDMLSurvival:
         pr_auc_dml = float(average_precision_score(y_test, test_h_factual))
         brier_dml = float(brier_score_loss(y_test, test_h_factual))
 
-        causal_hr_estimates = {}
-        causal_hr_se = {}
         all_h_iso0 = []
         all_h_iso1 = []
 
@@ -428,35 +452,48 @@ class PyTorchDMLSurvival:
             rr_isolated = float(np.mean(h_iso1) / max(np.mean(h_iso0), 1e-7))
             ate_isolated = float(np.mean(h_iso1 - h_iso0))
 
-            # Hazard Ratio Schätzung via Log-Risk
-            hr_est = float(np.clip(rr_isolated, 0.20, 1.80))
-            causal_hr_estimates[f"hr_{short_name}"] = hr_est
-            causal_hr_se[f"hr_{short_name}"] = 0.04 # Initialer analytischer Asym-SE
+            robinson_effects[f"neural_plug_in_rr_isolated_{short_name}"] = rr_isolated
+            robinson_effects[f"neural_plug_in_rr_partial_{short_name}"] = rr_partial
+            robinson_effects[f"neural_plug_in_ate_isolated_{short_name}"] = ate_isolated
+            robinson_effects[f"neural_plug_in_ate_partial_{short_name}"] = ate_partial
 
-            print(f"  • {short_name.upper():<14}: HR = {hr_est:.4f} | Isolated RR = {rr_isolated:.4f} | ATE = {ate_isolated:+.4f}")
+            print(
+                f"  • {short_name.upper():<14}: Robinson HR = {causal_hr_estimates[f'hr_{short_name}']:.4f} "
+                f"| Neural Isolated RR = {rr_isolated:.4f} | Neural ATE = {ate_isolated:+.4f}"
+            )
 
-        # 3. Student-Cluster Bootstrap (B=100) für exakte empirische Konfidenzintervalle
-        print("\n[Stufe 3b] Berechne 100-Fold Student-Cluster Bootstrap für empirische CIs ...")
+        # 3. Student-Cluster Bootstrap (B=100) mit Multinomial-Cluster-Gewichten (ohne .isin()-Deduplizierung!)
+        print("\n[Stufe 3b] Berechne 100-Fold Student-Cluster Bootstrap (Multinomial-Gewichte) ...")
         n_boot = 100
-        test_studis = df_test["studierenden_id"].unique()
-        boot_samples = np.zeros((n_boot, len(treatment_cols)), dtype=np.float32)
+        boot_samples = np.zeros((n_boot, n_treat), dtype=np.float32)
+        boot_neural_rr = np.zeros((n_boot, n_treat), dtype=np.float32)
+
+        _, cluster_inv_te = np.unique(df_test["studierenden_id"].values, return_inverse=True)
+        n_clusters_te = int(cluster_inv_te.max()) + 1
+        probs_tr = np.ones(n_clusters_tr, dtype=np.float64) / n_clusters_tr
+        probs_te = np.ones(n_clusters_te, dtype=np.float64) / n_clusters_te
 
         for b in range(n_boot):
-            sample_ids = np.random.choice(test_studis, size=len(test_studis), replace=True)
-            boot_idx = df_test[df_test["studierenden_id"].isin(sample_ids)].index.values
-            if len(boot_idx) == 0:
-                continue
+            # Multinomial-Gewichte für Trainings-Cluster (Robinson-Schätzer)
+            counts_tr = np.random.multinomial(n_clusters_tr, probs_tr).astype(np.float64)
+            w_tr = counts_tr[cluster_inv_tr]
+            Aw = A_tilde_64 * w_tr[:, None]
+            theta_b = np.linalg.lstsq(Aw.T @ A_tilde_64 + 1e-8 * np.eye(n_treat), Aw.T @ y_tilde_64, rcond=None)[0]
+            y0_b = float(np.average(y_train[untreated_mask], weights=w_tr[untreated_mask])) if np.any(untreated_mask) and np.sum(w_tr[untreated_mask]) > 0 else baseline_y0
+            boot_samples[b, :] = np.maximum(0.05, 1.0 + theta_b / max(y0_b, 1e-4)).astype(np.float32)
 
-            for k in range(len(treatment_cols)):
-                h0_sub = all_h_iso0[k][boot_idx]
-                h1_sub = all_h_iso1[k][boot_idx]
-                rr_b = float(np.mean(h1_sub) / max(np.mean(h0_sub), 1e-7))
-                boot_samples[b, k] = rr_b
+            # Multinomial-Gewichte für Test-Cluster (Neuronales Plug-In)
+            counts_te = np.random.multinomial(n_clusters_te, probs_te).astype(np.float64)
+            w_te = counts_te[cluster_inv_te]
+            w_te_sum = max(float(np.sum(w_te)), 1e-8)
+            for k in range(n_treat):
+                m0 = float(np.sum(all_h_iso0[k] * w_te) / w_te_sum)
+                m1 = float(np.sum(all_h_iso1[k] * w_te) / w_te_sum)
+                boot_neural_rr[b, k] = float(m1 / max(m0, 1e-7))
 
-        # Aktualisiere asymptotische SE mit Bootstrap Std
         for k, treat_col in enumerate(treatment_cols):
             short_name = treat_col.replace("_supp_count", "").replace("support_glz_", "")
-            causal_hr_se[f"hr_{short_name}"] = float(np.std(boot_samples[:, k]))
+            robinson_effects[f"neural_plug_in_rr_boot_se_{short_name}"] = float(np.std(boot_neural_rr[:, k]))
 
         # =====================================================================
         # LOGGING VIA CAUSAL EVALUATOR
@@ -466,13 +503,16 @@ class PyTorchDMLSurvival:
             model_name="torch_dml_orthogonal_survival",
             base_dir=self.output_dir,
             mode=self.mode,
-            temporal=self.temporal
+            temporal=self.temporal,
+            estimand_type="HR",
+            se_scale="natural",
         )
 
         extra_info = {
             "factual_roc_auc": auc_dml,
             "factual_pr_auc": pr_auc_dml,
             "factual_brier": brier_dml,
+            "baseline_unassisted_hazard": baseline_y0,
             "training_time_s": duration,
             "device": str(self.device),
             **robinson_effects,
@@ -482,7 +522,9 @@ class PyTorchDMLSurvival:
             hr_estimates=causal_hr_estimates,
             hr_se=causal_hr_se,
             bootstrap_samples=boot_samples,
-            extra_metrics=extra_info
+            extra_metrics=extra_info,
+            estimand_type="HR",
+            se_scale="natural",
         )
 
         # PyTorch Modellgewichte speichern

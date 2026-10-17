@@ -1,6 +1,6 @@
 ---
 created: 2026-09-02
-last_updated: 2026-09-06
+last_updated: 2026-10-17
 status: abgeschlossen
 tags: [dokumentation, index, navigation]
 ---
@@ -31,9 +31,11 @@ Dieses Verzeichnis bündelt alle architektonischen Entscheidungen (ADRs), Kausal
 
 ---
 
-### 3. [03_evaluations_and_benchmarks/](03_evaluations_and_benchmarks/) — Synopsen & Benchmarks (V4.2)
-- **Gesamtsynthesen:**
+### 3. [03_evaluations_and_benchmarks/](03_evaluations_and_benchmarks/) — Synopsen & Benchmarks (V4.2 / V4.2.5)
+- **Gesamtsynthesen & Modell-Gegenüberstellungen:**
+  - [`modell_gegenueberstellung_gesamt_v425.md`](03_evaluations_and_benchmarks/modell_gegenueberstellung_gesamt_v425.md): **Vollständige Side-by-Side-Gegenüberstellung aller >25 Modelle aus dem V4.2.5 Post-Refactor Benchmark** (alle 6 Modellfamilien, Pre- vs. Post-Refactor, Keras 3 vs. PyTorch 2.x Paritätsanalyse).
   - [`master_synopse_v4_gesamt.md`](03_evaluations_and_benchmarks/master_synopse_v4_gesamt.md): **Master-Synthese über alle 15 Szenarien und 225 DL-Modelle** des Feature Grids.
+  - [`causal_ground_truth_benchmark.md`](03_evaluations_and_benchmarks/causal_ground_truth_benchmark.md): **Vereinheitlichter Kausaler Ground-Truth Benchmark & KI-Policy-Targeting Showcase** (8 Parallelwelten vs. Cox/MSM/DML/G-Computation & 20%-Budget-Allokation).
   - [`synopse_heavy_suite_s01_s07_s08.md`](03_evaluations_and_benchmarks/synopse_heavy_suite_s01_s07_s08.md): **Heavy Deep Suite Gesamtauswertung** (Dual-Head GRU vs. Deep Transformer, Fail PR-AUC, Landmark Representation Learning).
 - **Isolierte Sensitivitäts-Synopsen:**
   - [`synopse_supportwirkung_s01_s02_s03.md`](03_evaluations_and_benchmarks/synopse_supportwirkung_s01_s02_s03.md): Variation der Supportwirkung (0.5× bis 2.0×).
@@ -53,13 +55,14 @@ Dieses Verzeichnis bündelt alle architektonischen Entscheidungen (ADRs), Kausal
 - [`04_Kausale_Vergleichsanalyse.md`](04_causal_and_simulation/04_Kausale_Vergleichsanalyse.md): Empirische Gesamtauswertung der 8 Parallelwelten (A–H) vs. Kausal-Schätzer.
 - [`03_Uebersicht_Kausale_Ansaetze.md`](04_causal_and_simulation/03_Uebersicht_Kausale_Ansaetze.md): Methodischer Vergleich von Naive vs. FWL-Partialling vs. DML vs. Oracle-Mediation.
 - [`systematische_verteilungsanalyse_v36_vs_v41.md`](04_causal_and_simulation/systematische_verteilungsanalyse_v36_vs_v41.md): Empirische Verteilungsanalyse aller Merkmale ($N=50.000$) und Aufdeckung des selektiven Motivations-Varianzkollapses ($\kappa=20{,}0$).
-- [`config_audit_und_v5_roadmap.md`](04_causal_and_simulation/config_audit_und_v5_roadmap.md): Systematischer Config-Audit (Zombies, Magic Numbers) & empirischer Kalibrierungsplan für Version 5 (DZHW, Destatis).
+- [`config_audit_und_v5_roadmap.md`](04_causal_and_simulation/config_audit_und_v5_roadmap.md): **DGP V5.0 Spezifikation, Config-Audit & Empirische Verifikation** (Zombie-Bereinigung, Parametrisierung aller Magic Numbers, Rekalibrierung $\kappa=9{,}0$, Zero-Inflated Beta Erwerb, Destatis-Quoten & Spätsemester-Apathie-Analyse).
 - [`datenprovenienz_und_generator_zuordnung_v36_v41.md`](04_causal_and_simulation/datenprovenienz_und_generator_zuordnung_v36_v41.md): Lückenlose Dokumentation der Generator-Versionen und Daten-Herkunft (V3.1 bis V4.1).
 
 ---
 
 ### 5. [06_misc/](06_misc/) — Infrastruktur & Hardware
 - [`system_and_hardware_stack.md`](06_misc/system_and_hardware_stack.md): Umfassende Dokumentation der Recheninfrastruktur (HP EliteDesk G5 Workstation vs. Lenovo ThinkCentre M70q Homeserver Cluster Node unter Proxmox VE / Debian LXC).
+- [`docker_proxmox_deployment_guide.md`](06_misc/docker_proxmox_deployment_guide.md): Containerisierungs- und Proxmox-Deployment-Leitfaden.
 
 ---
 
@@ -70,6 +73,8 @@ Dieses Verzeichnis bündelt alle architektonischen Entscheidungen (ADRs), Kausal
 - [`2026_09_02_Submodules_and_Synthesis.md`](07_conversation_logs/2026_09_02_Submodules_and_Synthesis.md): Portfolio-Architektur via Git Submodules und LFS-Force-Push.
 - [`2026_09_04_Full_Grid_Run_and_Heavy_Suite.md`](07_conversation_logs/2026_09_04_Full_Grid_Run_and_Heavy_Suite.md): Vollendung des 225-Modelle-Grid-Runs, ThinkCentre Cluster Execution & Heavy Suite Synopse.
 - [`2026_09_06_Evaluation_Architecture_and_Doc_Linking.md`](07_conversation_logs/2026_09_06_Evaluation_Architecture_and_Doc_Linking.md): 5 OOP Evaluator-Klassen, Rollout auf alle 14 Modelle, Markdown-Cross-Linking (Tier 1–3) & Windows venv Härtung.
+- [`2026_09_12_PyTorch_Suite_Causal_LXC_and_2x4_Ablation.md`](07_conversation_logs/2026_09_12_PyTorch_Suite_Causal_LXC_and_2x4_Ablation.md): PyTorch/PyCox Modeling Suite, LXC Multi-Mode Causal Benchmark, $2^4$-Architektur-Ablation & DGP-Audit.
+- [`2026_10_17_Post_Refactor_Benchmark_V425_and_DGP_V5.md`](07_conversation_logs/2026_10_17_Post_Refactor_Benchmark_V425_and_DGP_V5.md): Post-Refactor Gesamt-Benchmark (V4.2.5), Kausales Policy-Targeting, DGP V5.0 Rollout & 23 Unit-Tests.
 
 ---
 

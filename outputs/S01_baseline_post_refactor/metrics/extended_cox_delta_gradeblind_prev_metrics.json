@@ -1,0 +1,55 @@
+{
+    "model_name": "extended_cox_delta",
+    "mode": "gradeblind",
+    "temporal_type": "prev",
+    "estimand_type": "HR",
+    "se_scale": "log",
+    "hr_fachlich": 1.0,
+    "hr_ueberfachlich": 1.0,
+    "hr_psychosozial": 1.0,
+    "risk_reduction_pct_hr_fachlich": 0.0,
+    "risk_reduction_pct_hr_ueberfachlich": 0.0,
+    "risk_reduction_pct_hr_psychosozial": 0.0,
+    "ci_lower_95_asym_hr_fachlich": 0.9066489037539209,
+    "ci_upper_95_asym_hr_fachlich": 1.1029627851085078,
+    "ci_lower_95_asym_hr_ueberfachlich": 0.9066489037539209,
+    "ci_upper_95_asym_hr_ueberfachlich": 1.1029627851085078,
+    "ci_lower_95_asym_hr_psychosozial": 0.9066489037539209,
+    "ci_upper_95_asym_hr_psychosozial": 1.1029627851085078,
+    "model_type": "extended_cox_prev_gradeblind",
+    "temporal": "prev",
+    "Support_HR_Fach_count": 1.0,
+    "Support_HR_Uebf_count": 1.0,
+    "Support_HR_Psych_count": 1.0,
+    "test_c_index": 0.5,
+    "test_roc_auc": 0.5,
+    "fach_partial": {
+        "mean_hr": 1.0,
+        "median_hr": 1.0
+    },
+    "fach_isolated": {
+        "mean_hr": 1.0,
+        "median_hr": 1.0
+    },
+    "uebf_partial": {
+        "mean_hr": 1.0,
+        "median_hr": 1.0
+    },
+    "uebf_isolated": {
+        "mean_hr": 1.0,
+        "median_hr": 1.0
+    },
+    "psych_partial": {
+        "mean_hr": 1.0,
+        "median_hr": 1.0
+    },
+    "psych_isolated": {
+        "mean_hr": 1.0,
+        "median_hr": 1.0
+    },
+    "Support_HR_Fach_tv": 1.0,
+    "Support_HR_Uebf_tv": 1.0,
+    "Support_HR_Psych_tv": 1.0,
+    "HR_fails_prev": null,
+    "HR_delta_cp_prev": null
+}

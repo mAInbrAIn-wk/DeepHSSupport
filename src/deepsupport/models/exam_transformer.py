@@ -28,35 +28,39 @@ from tensorflow.keras.layers import Input, Dense, Dropout, LayerNormalization, M
 import tensorflow.keras.backend as K
 
 # Import metrics_logger and feature_builder
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from deepsupport.models.semester_gru import masked_binary_crossentropy, PADDING_VALUE
+from deepsupport.models.semester_transformer import PositionalEncoding
 from deepsupport.evaluation.metrics_logger import save_metrics, save_keras_model, plot_learning_curve, plot_roc_curve, plot_pr_curve, SurvivalEvaluator
 import deepsupport.data_engine.feature_builder as fb
 
 
-def build_exam_causal_transformer(max_exams: int, num_features: int, d_model: int = 64, num_heads: int = 4) -> Model:
+def build_exam_causal_transformer(max_exams: int = 40, num_features: int = 10, d_model: int = 64, num_heads: int = 4, **kwargs) -> Model:
+    if 'seq_len' in kwargs:
+        max_exams = kwargs['seq_len']
+    if 'n_features' in kwargs:
+        num_features = kwargs['n_features']
     inputs = Input(shape=(max_exams, num_features))
+    masked_inputs = Masking(mask_value=PADDING_VALUE)(inputs)
 
-    x = Dense(d_model)(inputs)
+    x = TimeDistributed(Dense(d_model, activation='relu'))(masked_inputs)
+    x = PositionalEncoding(max_exams, d_model)(x)
     x = LayerNormalization()(x)
 
-    causal_mask = tf.linalg.band_part(tf.ones((max_exams, max_exams)), -1, 0)
-    causal_mask = tf.cast(causal_mask, tf.bool)
-
-    # Block 1
+    # Block 1 (kombiniert automatisch Padding-Maske aus Masking mit use_causal_mask=True)
     attn_out1 = MultiHeadAttention(num_heads=num_heads, key_dim=d_model // num_heads)(
-        x, x, attention_mask=causal_mask
+        query=x, value=x, key=x, use_causal_mask=True
     )
     x1 = LayerNormalization()(x + Dropout(0.1)(attn_out1))
-    ff_out1 = Dense(d_model, activation='relu')(x1)
+    ff_out1 = TimeDistributed(Dense(d_model, activation='relu'))(x1)
     x1 = LayerNormalization()(x1 + Dropout(0.1)(ff_out1))
 
     # Block 2
     attn_out2 = MultiHeadAttention(num_heads=num_heads, key_dim=d_model // num_heads)(
-        x1, x1, attention_mask=causal_mask
+        query=x1, value=x1, key=x1, use_causal_mask=True
     )
     x2 = LayerNormalization()(x1 + Dropout(0.1)(attn_out2))
-    ff_out2 = Dense(d_model, activation='relu')(x2)
+    ff_out2 = TimeDistributed(Dense(d_model, activation='relu'))(x2)
     x2 = LayerNormalization()(x2 + Dropout(0.1)(ff_out2))
 
     time_dense = TimeDistributed(Dense(32, activation='relu'))(x2)
@@ -66,6 +70,9 @@ def build_exam_causal_transformer(max_exams: int, num_features: int, d_model: in
     model = Model(inputs=inputs, outputs=outputs, name="exam_causal_transformer")
     model.compile(optimizer=tf.keras.optimizers.Adam(0.003), loss=masked_binary_crossentropy)
     return model
+
+
+build_exam_transformer = build_exam_causal_transformer
 
 
 def train_transformer_exam_survival(data_dir: Path = Path('src/output_dl'),
@@ -90,21 +97,18 @@ def train_transformer_exam_survival(data_dir: Path = Path('src/output_dl'),
     train_idx, temp_idx = train_test_split(idx, test_size=0.30, random_state=42, stratify=studi_events)
     val_idx, test_idx = train_test_split(temp_idx, test_size=0.50, random_state=42, stratify=studi_events[temp_idx])
 
-    X_train, y_train = X_seq[train_idx].copy(), y_seq[train_idx].copy()
-    X_val, y_val = X_seq[val_idx].copy(), y_seq[val_idx].copy()
-    X_test, y_test = X_seq[test_idx].copy(), y_seq[test_idx].copy()
+    y_train = y_seq[train_idx].copy()
+    y_val = y_seq[val_idx].copy()
+    y_test = y_seq[test_idx].copy()
 
-    # Skalierung
-    train_mask = X_train[:, :, 0] != PADDING_VALUE
-    val_mask = X_val[:, :, 0] != PADDING_VALUE
+    # Zentralisierte 3D-Skalierung
+    scaled_splits, scaler = fb.scale_3d_sequences(
+        {"train": X_seq[train_idx], "val": X_seq[val_idx], "test": X_seq[test_idx]},
+        fit_key="train",
+        padding_value=PADDING_VALUE,
+    )
+    X_train, X_val, X_test = scaled_splits["train"], scaled_splits["val"], scaled_splits["test"]
     test_mask = X_test[:, :, 0] != PADDING_VALUE
-
-    scaler = StandardScaler()
-    scaler.fit(X_train[train_mask])
-
-    X_train[train_mask] = scaler.transform(X_train[train_mask])
-    X_val[val_mask] = scaler.transform(X_val[val_mask])
-    X_test[test_mask] = scaler.transform(X_test[test_mask])
 
     # Modell
     tf.random.set_seed(42)

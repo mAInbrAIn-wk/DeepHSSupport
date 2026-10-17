@@ -3,6 +3,32 @@
 Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
+## [V5.0.0 & V4.2.5 Post-Refactor Gesamt-Benchmark, Kausales Policy-Targeting & DGP Version 5] - 2026-10-17
+### Added
+- **Vollständige Modell-Gegenüberstellung V4.2.5 (`docs/03_evaluations_and_benchmarks/modell_gegenueberstellung_gesamt_v425.md`):**
+  - Kompletter Neu-Lauf aller 34 Benchmark-Schritte (>25 Modelle über alle 6 Familien in Keras 3 & PyTorch 2.x) via `src/deepsupport/runners/run_post_refactor_benchmark_s01.py`.
+  - Side-by-Side-Abgleich Pre-Refactor (V4.2) vs. Post-Refactor (V4.2.5) sowie Dual-Framework-Paritätsanalyse Keras 3 vs. PyTorch 2.x.
+- **Vereinheitlichter Kausaler Ground-Truth & KI-Policy-Targeting Benchmark (`src/deepsupport/evaluation/causal_ground_truth_benchmark.py`, `docs/03_evaluations_and_benchmarks/causal_ground_truth_benchmark.md`):**
+  - Direkter Abgleich aller 6 Kausalschätzer gegen die exakte Parallelwelten-Ground-Truth (Universum A vs. B/F/G/H).
+  - Nachweis, dass KI-gestütztes Targeting bei identischem Förderbudget ($31{,}8\,\%$ Kontingent) **$2{,}39\times$ mehr Studienabbrüche verhindert** als eine Gießkannen-Vergabe ($-4{,}24\,\text{pp}$ vs. $-1{,}78\,\text{pp}$).
+- **DGP Version 5.0 Rollout (`src/deepsupport/data_engine/config.py`, `src/deepsupport/simulation/engine.py`):**
+  - Entfernung aller 3 historischen V1–V3 Zombie-Parameter (`gewicht_erwerb`, `gewicht_motivation_rauschen`, `gewicht_integration_rauschen`).
+  - Explizite Aufnahme aller 5 Szenario-Schalter (`overload_penalty_factor`, `overload_penalty_cap`, `support_kosten_faktor`, `rct_support_uptake`, `disable_apathy_dampening`) sowie Parametrisierung von >25 vormals hartcodierten *Magic Numbers* in `CONFIG`.
+  - Empirische Rekalibrierung: $\kappa_{\text{Motivation}} = \kappa_{\text{Integration}} = 9{,}0$ ($\sigma_{\text{total}} = 0{,}1637$, behebt den V4.1-Varianzkollaps), Zero-Inflated Beta Erwerbstätigkeit nach 22. DSW-Sozialerhebung ($37{,}3\,\%$ bei $0\,\text{h}$, Median $15{,}0\,\text{h}$), $28\,\%$ Migrationsquote und fachbereichsspezifische Destatis-Frauenanteile in `STUDIENGAENGE`.
+  - Bereitstellung von `get_v41_legacy_config()` für direkte V4.1-vs.-V5.0-Replikationsvergleiche.
+- **Automatisierte Unit-Test-Suite (`tests/`, 23 Tests):**
+  - 5 Testmodule (`test_survival_losses.py`, `test_causal_estimators.py`, `test_data_splits_and_scaling.py`, `test_metrics_logger.py`, `test_simulation_v5.py`) mit 23 Unit-Tests (`Ran 23 tests in 14.05s — OK`).
+
+### Fixed
+- **Breslow Float32 Log-Sum-Exp Underflow & Counting-Process Left-Truncation (`extended_deepsurv.py`, `deep_survival.py`, `survival.py`):**
+  - Behebt den Float32-Overflow/Underflow in `tf.cumsum(tf.exp(y_pred))` bei $N \approx 35.000$ Zeilen durch numerisch exaktes Log-Sum-Exp-Centering und exakte Anderson-Gill-Risikomengen ($t_{\text{start},j} < t_i \le t_{\text{stop},j}$). Keras Extended DeepSurv springt von `ROC-AUC = 0.5621` auf **`0.7852`** (`+22.3pp`) bzw. **`0.8692` (Oracle, `+31.8pp`)** und `C-Index = 0.9039`.
+- **Competing-Risks Softmax & $F_1(\tau)$ (`dynamic_deephit.py`):**
+  - 3-Zustands-Softmax (`Survive`, `Dropout`, `Graduation`) garantiert $\sum_k P_k \equiv 1$ und evaluiert die spezifische Dropout-CIF $F_1(\tau)$ (`ROC-AUC: 0.5924 -> 0.8920`).
+- **Multivariate Robinson-Gleichung, Liang-Zeger Cluster-SEs & Multinomialer Bootstrap (`dml_orthogonal.py`, `dml_transformer.py`, `torch_dml.py`):**
+  - Gemeinsame Schätzung korrelierter Förderpfade, student-geclusterte Sandwich-Standardfehler und multinomialer Cluster-Multiplizitäts-Bootstrap (`rng.multinomial` statt deduplizierendem `.isin()`).
+- **3D-Sequenzskalierung, Mask-Propagation & Hurdle-Regression (`feature_builder.py`, `deep_transformer_regression.py`, `baseline_regressors.py`):**
+  - `scale_3d_sequences` für alle Keras-3D-Tensormodelle aktiviert; `SinCosPositionalEncoding` propagiert `_keras_mask`; zweistufige Hurdle-Architektur (`graduates_only=True`) eliminiert die künstliche `3.0`-Imputation bei Studienabbrechern (`MLP-Regressor R²: 0.5223 -> 0.8695`).
+
 ## [V4.2.5 Config-Audit, DGP-Leerstellen & V5-Roadmap] - 2026-09-09
 ### Added
 - **Systematischer Config-Audit & V5-Roadmap (`docs/04_causal_and_simulation/config_audit_und_v5_roadmap.md`):**

@@ -26,7 +26,7 @@ from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Dense, Dropout, BatchNormalization, Input
 
 # Import metrics_logger, extended_deep_survival, and feature_builder
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from deepsupport.models.extended_deepsurv import breslow_cox_loss
 from deepsupport.evaluation.metrics_logger import save_metrics, save_keras_model
 import deepsupport.data_engine.feature_builder as fb

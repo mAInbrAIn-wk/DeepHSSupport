@@ -30,7 +30,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Dense, Dropout, Masking, GRU, LayerNormalization, Concatenate
 
 # Import metrics_logger and feature_builder
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from deepsupport.evaluation.metrics_logger import save_metrics, save_keras_model, plot_learning_curve, plot_parity_plot, DualHeadEvaluator
 import deepsupport.data_engine.feature_builder as fb
 
@@ -68,93 +68,41 @@ def build_dual_head_next_exam_model(seq_timesteps: int, seq_features: int, conte
     return model
 
 
-def prepare_next_exam_dataset(data_dir: Path, max_history_len: int = 30):
-    """Erstellt Paare von (Historie 1..k, Kontext k+1 -> Note k+1, Bestanden k+1)."""
-    df_ab, df_pr = fb._load_raw_data(data_dir)
-
-    df_pr = df_pr.sort_values(['studierenden_id', 'pruefung_id']).reset_index(drop=True)
-    df_pr['bestanden_int'] = df_pr['bestanden'].astype(int)
-    df_pr['note_clean'] = df_pr['note'].fillna(5.0)
-
-    # Demographie
-    df_ab['hzb_ord'] = df_ab['hzb_typ'].map(fb.HZB_ORDINAL_MAP).fillna(3.0)
-    demo_dict = df_ab.set_index('studierenden_id')[['hzb_note', 'hzb_ord', 'erwerbstaetigkeit_std', 'erstakademiker']].to_dict('index')
-
-    hist_feats = ['versuch', 'schwierigkeit', 'cp', 'bestanden_int', 'note_clean',
-                  'support_vorher_fachlich', 'support_vorher_ueberfachlich', 'support_vorher_psychosozial', 'support_glz_fachlich', 'support_glz_ueberfachlich', 'support_glz_psychosozial', 'fachsemester']
-
-    X_hist_list, X_ctx_list, y_grade_list, y_pass_list, student_id_list = [], [], [], [], []
-
-    grouped = df_pr.groupby('studierenden_id')
-    print(f"Erstelle Autoregressive Next-Exam Samples für {len(grouped)} Studierende ...")
-
-    for s_id, group in grouped:
-        demo = demo_dict.get(s_id, {'hzb_note': 2.5, 'hzb_ord': 3.0, 'erwerbstaetigkeit_std': 0.0, 'erstakademiker': 0})
-        demo_vec = [float(demo['hzb_note']), float(demo['hzb_ord']), float(demo['erwerbstaetigkeit_std']), float(bool(demo['erstakademiker']))]
-
-        records = group[hist_feats].values
-        n_exams = len(records)
-
-        # Erzeuge Samples für jeden Schritt k >= 1 (mindestens 1 Prüfung Historie)
-        for k in range(1, min(n_exams, 35)):
-            history = records[:k]
-            next_exam = records[k]
-
-            # Padded Sequence
-            pad_seq = np.full((max_history_len, len(hist_feats)), PADDING_VALUE, dtype=np.float32)
-            hist_len = min(len(history), max_history_len)
-            pad_seq[:hist_len] = history[-hist_len:]
-
-            # Kontext der nächsten Prüfung: Versuch, Schwierigkeit, CP, Supports + Demographie
-            ctx = [next_exam[0], next_exam[1], next_exam[2], next_exam[5], next_exam[6], next_exam[7], next_exam[8], next_exam[9], next_exam[10], next_exam[11]] + demo_vec
-
-            X_hist_list.append(pad_seq)
-            X_ctx_list.append(ctx)
-            y_grade_list.append(next_exam[4]) # note_clean
-            y_pass_list.append(next_exam[3])  # bestanden_int
-            student_id_list.append(s_id)
-
-    X_hist = np.array(X_hist_list, dtype=np.float32)
-    X_ctx = np.array(X_ctx_list, dtype=np.float32)
-    y_grade = np.array(y_grade_list, dtype=np.float32)
-    y_pass = np.array(y_pass_list, dtype=np.float32)
-    student_ids = np.array(student_id_list)
-
-    print(f"Gesamtanzahl Next-Exam Samples: {len(X_hist):,}")
-    return X_hist, X_ctx, y_grade, y_pass, student_ids
+def prepare_next_exam_dataset(data_dir: Path, max_history_len: int = 30, mode: str = 'standard'):
+    """Delegiert an die zentralisierte Feature-Engine (fb.prepare_next_exam_dataset)."""
+    return fb.prepare_next_exam_dataset(data_dir=data_dir, max_history_len=max_history_len, mode=mode)
 
 
 def train_autoregressive_next_exam(data_dir: Path = Path('src/output_dl'),
                                   output_dir: Optional[Path] = None,
+                                  mode: str = 'standard',
                                   epochs: int = 25,
                                   batch_size: int = 256):
     print("\n" + "=" * 74)
-    print("   AUTOREGRESSIVE NEXT-EXAM PREDICTION (DUAL-HEAD MULTI-TASK)")
+    print(f"   AUTOREGRESSIVE NEXT-EXAM PREDICTION (DUAL-HEAD MULTI-TASK | mode={mode})")
     print("=" * 74)
 
-    X_hist, X_ctx, y_grade, y_pass, student_ids = prepare_next_exam_dataset(data_dir)
+    X_hist, X_ctx, y_grade, y_pass, student_ids = fb.prepare_next_exam_dataset(data_dir, mode=mode)
 
-    # 3-Way Group-Consistent Split on student IDs
-    unique_students = np.unique(student_ids)
-    tr_students, temp_students = train_test_split(unique_students, test_size=0.30, random_state=42)
-    va_students, te_students = train_test_split(temp_students, test_size=0.50, random_state=42)
+    # 3-Way Group-Consistent Split on student IDs via feature_builder
+    tr_students, va_students, te_students = fb.split_student_ids(student_ids, seed=42)
 
     tr_idx = np.where(np.isin(student_ids, tr_students))[0]
     va_idx = np.where(np.isin(student_ids, va_students))[0]
     te_idx = np.where(np.isin(student_ids, te_students))[0]
 
-    # Skalierung
-    v_mask_tr = X_hist[tr_idx, :, 0] != PADDING_VALUE
-    scaler_seq = StandardScaler()
-    scaler_seq.fit(X_hist[tr_idx][v_mask_tr])
+    # Zentralisierte 3D-Sequenz-Skalierung (verhindert den NumPy Fancy-Indexing Copy-Bug!)
+    scaled_hist, _ = fb.scale_3d_sequences(
+        {"train": X_hist[tr_idx], "val": X_hist[va_idx], "test": X_hist[te_idx]},
+        fit_key="train",
+        padding_value=PADDING_VALUE,
+    )
+    X_hist_tr, X_hist_va, X_hist_te = scaled_hist["train"], scaled_hist["val"], scaled_hist["test"]
 
     scaler_ctx = StandardScaler()
-    scaler_ctx.fit(X_ctx[tr_idx])
-
-    for split in [tr_idx, va_idx, te_idx]:
-        vm = X_hist[split, :, 0] != PADDING_VALUE
-        X_hist[split][vm] = scaler_seq.transform(X_hist[split][vm])
-        X_ctx[split] = scaler_ctx.transform(X_ctx[split])
+    X_ctx_tr = scaler_ctx.fit_transform(X_ctx[tr_idx]).astype(np.float32)
+    X_ctx_va = scaler_ctx.transform(X_ctx[va_idx]).astype(np.float32)
+    X_ctx_te = scaler_ctx.transform(X_ctx[te_idx]).astype(np.float32)
 
     # Modell
     tf.random.set_seed(42)
@@ -166,21 +114,28 @@ def train_autoregressive_next_exam(data_dir: Path = Path('src/output_dl'),
 
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-        loss={'out_grade': 'mse', 'out_pass': 'binary_crossentropy'},
-        loss_weights={'out_grade': 1.0, 'out_pass': 0.8},
-        metrics={'out_grade': ['mae'], 'out_pass': ['accuracy']}
+        loss=['mse', 'binary_crossentropy'],
+        loss_weights=[1.0, 0.8],
+        metrics=[['mae'], ['accuracy']]
     )
 
     es = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=8, restore_best_weights=True)
     lr_sched = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=2, min_lr=1e-5, verbose=0)
 
-    print(f"\nTrainiere Dual-Head Next-Exam Modell ({epochs} Epochen)...")
+    # 1/K_i Sample-Gewichtung pro Studierendem (verhindert Dominanz von Langzeitstudierenden)
+    unique_tr, counts_tr = np.unique(student_ids[tr_idx], return_counts=True)
+    count_map_tr = dict(zip(unique_tr, counts_tr))
+    sw_tr = np.array([1.0 / max(1, count_map_tr[s]) for s in student_ids[tr_idx]], dtype=np.float32)
+    sw_tr *= len(sw_tr) / np.sum(sw_tr)
+
+    print(f"\nTrainiere Dual-Head Next-Exam Modell ({epochs} Epochen, 1/K_i gewichtet)...")
     history = model.fit(
-        {'exam_history': X_hist[tr_idx], 'next_exam_context': X_ctx[tr_idx]},
-        {'out_grade': y_grade[tr_idx], 'out_pass': y_pass[tr_idx]},
+        [X_hist_tr, X_ctx_tr],
+        [y_grade[tr_idx], y_pass[tr_idx]],
+        sample_weight=sw_tr,
         validation_data=(
-            {'exam_history': X_hist[va_idx], 'next_exam_context': X_ctx[va_idx]},
-            {'out_grade': y_grade[va_idx], 'out_pass': y_pass[va_idx]}
+            [X_hist_va, X_ctx_va],
+            [y_grade[va_idx], y_pass[va_idx]]
         ),
         epochs=epochs, batch_size=batch_size,
         callbacks=[es, lr_sched], verbose=0
@@ -188,7 +143,7 @@ def train_autoregressive_next_exam(data_dir: Path = Path('src/output_dl'),
 
     # Evaluation
     preds_grade, preds_pass = model.predict(
-        {'exam_history': X_hist[te_idx], 'next_exam_context': X_ctx[te_idx]},
+        [X_hist_te, X_ctx_te],
         verbose=0
     )
     preds_grade = preds_grade.flatten()
@@ -221,7 +176,7 @@ def train_autoregressive_next_exam(data_dir: Path = Path('src/output_dl'),
 
     # Logging
     base_dir = Path(output_dir) if output_dir is not None else data_dir
-    model_name = "autoregressive_next_exam_dual_head"
+    model_name = "autoregressive_next_exam_dual_head" if mode == 'standard' else f"autoregressive_next_exam_dual_head_{mode}"
 
     metrics_dict = {
         "Next_Exam_Grade_R2": r2,
@@ -232,11 +187,11 @@ def train_autoregressive_next_exam(data_dir: Path = Path('src/output_dl'),
         "Next_Exam_Pass_Brier_Score": brier_pass
     }
     
-    evaluator = DualHeadEvaluator(base_dir=base_dir, model_name=model_name)
+    evaluator = DualHeadEvaluator(base_dir=base_dir, model_name=model_name, mode=mode)
     evaluator.evaluate_and_log(
         y_grade_true=y_te_grade, y_grade_pred=preds_grade,
         y_pass_true=y_te_pass, y_pass_prob=preds_pass,
-        history=history.history, model=model
+        history=history.history, model=model, mode=mode
     )
 
     print(f"[OK] Autoregressive Next-Exam Modell erfolgreich gespeichert.")
@@ -246,8 +201,9 @@ def train_autoregressive_next_exam(data_dir: Path = Path('src/output_dl'),
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Autoregressive Next-Exam Prediction")
     parser.add_argument('--data_dir', type=str, default='src/output_dl')
+    parser.add_argument('--mode', type=str, default='standard')
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--batch_size', type=int, default=256)
     args = parser.parse_args()
 
-    train_autoregressive_next_exam(Path(args.data_dir), epochs=args.epochs, batch_size=args.batch_size)
+    train_autoregressive_next_exam(Path(args.data_dir), mode=args.mode, epochs=args.epochs, batch_size=args.batch_size)

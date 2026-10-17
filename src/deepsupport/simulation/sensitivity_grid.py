@@ -200,7 +200,7 @@ def _simulate_single_universe_worker(args: Tuple) -> Dict:
         df_dict.update(as_dataframe(studierende, stammdaten))
         uni_out = out_base / scenario_id / f"universe_{uni_key}"
         uni_out.mkdir(parents=True, exist_ok=True)
-        exportiere_csv(df_dict, uni_out, cfg=sim_cfg, generator_script=__file__, extra_info={"scenario_id": scenario_id, "universe": uni_key, "universe_label": uni_cfg["label"]})
+        exportiere_csv(df_dict, uni_out, cfg=cfg_scenario, generator_script=__file__, extra_info={"scenario_id": scenario_id, "universe": uni_key, "universe_label": uni_cfg["label"]})
         
     duration = time.time() - t0
     

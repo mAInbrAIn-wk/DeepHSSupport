@@ -1,0 +1,52 @@
+{
+    "Naive Bayes": {
+        "accuracy": 0.8235130628126737,
+        "f1_weighted": 0.8230835801696978,
+        "roc_auc": 0.8576361460933503,
+        "pr_auc": 0.7475728730464943,
+        "brier": 0.1487259732518478
+    },
+    "Random Forest": {
+        "accuracy": 0.8265703168426903,
+        "f1_weighted": 0.8199513153655608,
+        "roc_auc": 0.8480167080160801,
+        "pr_auc": 0.728612746164292,
+        "brier": 0.12554652432231533
+    },
+    "SVM (RBF)": {
+        "accuracy": 0.8413007226236798,
+        "f1_weighted": 0.8297901963286398,
+        "roc_auc": 0.8254004020418864,
+        "pr_auc": 0.7414306144349483,
+        "brier": 0.12208289266921328
+    },
+    "Keras MLP": {
+        "accuracy": 0.8407448582545859,
+        "f1_weighted": 0.8290506146440617,
+        "roc_auc": 0.8740003947625765,
+        "pr_auc": 0.7700861839901139,
+        "brier": 0.11353521049022675
+    },
+    "model_name": "mlp_baseline",
+    "mode": "standard",
+    "temporal_type": "flat",
+    "n_samples": 7196,
+    "label_class_1": "Dropout",
+    "label_class_0": "Non-Drop",
+    "dropout_prevalence_pi0": 0.2615341856586993,
+    "roc_auc": 0.8740003947625765,
+    "pr_auc_dropout": 0.7700861839901139,
+    "pr_auc_nondropout": 0.9381892161586458,
+    "pr_auc_baseline_pi0": 0.2615341856586993,
+    "pr_auc_class_1": 0.7700861839901139,
+    "pr_auc_class_0": 0.9381892161586458,
+    "pr_auc_baseline_class_1": 0.2615341856586993,
+    "pr_auc_baseline_class_0": 0.7384658143413008,
+    "pr_auc_lift_class_1": 2.944495313492486,
+    "pr_auc_lift_class_0": 1.270457207278437,
+    "brier_score": 0.11353521049022675,
+    "brier_skill_score": 0.41214297882035933,
+    "f1_score": 0.6336317135549873,
+    "balanced_accuracy": 0.7392905152591533,
+    "c_index": null
+}

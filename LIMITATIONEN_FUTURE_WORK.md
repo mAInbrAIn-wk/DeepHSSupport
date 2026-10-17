@@ -1,16 +1,23 @@
+---
+created: 2026-08-30
+last_updated: 2026-10-17
+status: abgeschlossen
+tags: [limitationen, future-work, dgp-v5, kausalinferenz, methodik]
+---
+
 # Limitationen & Future Work
 
 Dieses Dokument fasst die methodischen, datentechnischen und konzeptionellen Einschränkungen des Projekts zusammen und skizziert Ansätze für zukünftige Arbeiten.
 
 ---
 
-## 1. Limitationen der Simulations-Engine (`simulation.py`)
+## 1. Limitationen der Simulations-Engine (`engine.py`)
 
 ### A. Studiengangs-Modellierung & Fachbereichsklima
 Der synthetische Generator unterscheidet Studiengänge derzeit primär über:
 - Die Abfolge, Anzahl und Credit-Points der Pflichtmodule
 - Die Modul-Schwierigkeitsgrade und Prüfungshürden
-- Die empirische Geschlechterverteilung pro Studiengang
+- Die empirische Geschlechterverteilung pro Studiengang (seit **DGP V5.0** fachspezifisch nach Destatis Fachserie 11 kalibriert)
 
 **Einschränkung:** Es gibt derzeit **keine domänenspezifische Modellierung von Fachbereichskulturen**, sozialen Stereotype-Threats (z. B. MINT-spezifisches Hürdenklima für Frauen nach DZHW-Studien) oder psychologischen Gruppenprofilen. Alle Studierenden teilen dieselbe fundamentale Motivations- und Integrationsdynamik.
 
@@ -19,13 +26,13 @@ Der synthetische Generator unterscheidet Studiengänge derzeit primär über:
 ### B. Parametrische Sensitivität & Sensitivitäts-Grid (V4.1 / V4.2)
 Die heuristisch-plausibel gewählten Parameter wurden im **V4.1/V4.2 Sensitivity Grid** (15 Szenarien $\times$ 8 Universen, $N=50.000$) systematisch evaluiert (ARR-Spanne $7{,}3 - 8{,}5\,\text{pp}$). Die Sensitivitätsanalyse zeigte eine hohe strukturelle Stabilität des relativen Risikos, deckte jedoch eine signifikante Nichtlinearität auf: Lineare Cox-Modelle maskieren den Schutzeffekt des Supports ($HR=1{,}06$), während der Schutzeffekt in der tatsächlichen Risikogruppe ($\text{Motivation} < 0{,}40$) greift ($HR=0{,}9927$).
 
-### C. DGP-Varianzkollaps & Beta-Kalibrierung (V4.1)
-Bei der Umstellung von Gauß-Clipping auf Beta-Verteilungen in V4.1 wurde die empirische Varianz von HZB-Note und Alter perfekt repliziert, die Standardabweichung der Motivation und sozialen Integration kollabierte jedoch um $50\,\%$ ($\sigma_{\text{V3}} \approx 0{,}24 \rightarrow \sigma_{\text{V4}} \approx 0{,}12$ bei $\kappa=20{,}0$). Dies führte zu einer unnatürlich sterilen Studienabbrecherpopulation in Semester 1.
-*Future Work (Version 5):* Rekalibrierung auf $\kappa_{\text{Motivation}} = 9{,}0$ ($\sigma \approx 0{,}15$), was den psychometrischen Normdaten (Academic Motivation Scale AMS, SELLMO) entspricht. Siehe [`docs/04_causal_and_simulation/config_audit_und_v5_roadmap.md`](docs/04_causal_and_simulation/config_audit_und_v5_roadmap.md).
+### C. Historischer DGP-Varianzkollaps in V4.1 (in DGP V5.0 behoben)
+Bei der Umstellung von Gauß-Clipping auf Beta-Verteilungen in **V4.1** wurde die empirische Varianz von HZB-Note und Alter perfekt repliziert, die Standardabweichung der Motivation und sozialen Integration kollabierte jedoch um $50\,\%$ ($\sigma_{\text{V3}} \approx 0{,}24 \rightarrow \sigma_{\text{V4}} \approx 0{,}12$ bei $\kappa=20{,}0$).
+- **Status (in DGP V5.0 behoben):** In **Version 5.0** (`config.py`, `engine.py`) wurde die Konzentration auf $\kappa_{\text{Motivation}} = \kappa_{\text{Integration}} = 9{,}0$ ($\sigma_{\text{total}} = 0{,}1637$) rekalibriert, was den psychometrischen Normdaten (Academic Motivation Scale AMS, SELLMO) exakt entspricht. Zudem wurde die Erwerbstätigkeit auf ein *Zero-Inflated Beta*-Modell ($37{,}3\,\%$ bei $0\,\text{h}$, Median $15{,}0\,\text{h}$) nach der 22. DSW-Sozialerhebung umgestellt. Für historische Replikationsvergleiche steht `get_v41_legacy_config()` bereit; Details siehe [`docs/04_causal_and_simulation/config_audit_und_v5_roadmap.md`](docs/04_causal_and_simulation/config_audit_und_v5_roadmap.md).
 
-### D. Konfigurations-Zombies & Hartcodierte Parameter
-Der systematische Config-Audit deckte verwaiste Parameter in `CONFIG` auf (`gewicht_erwerb`, `gewicht_motivation_rauschen`, `gewicht_integration_rauschen`), 5 ungesicherte `.get()`-Defaults in `engine.py` (`overload_penalty_factor`, etc.) sowie über 25 hartcodierte Parameter (*Magic Numbers*).
-*Future Work (Version 5):* Vollständige Bereinigung, strukturierte Config-Klassen und Parametrisierung aller Simulationskonstanten.
+### D. Konfigurations-Zombies & Hartcodierte Parameter (in DGP V5.0 behoben)
+Der systematische Config-Audit deckte in V4.1 verwaiste Parameter in `CONFIG` (`gewicht_erwerb`, `gewicht_motivation_rauschen`, `gewicht_integration_rauschen`), 5 ungesicherte `.get()`-Defaults in `engine.py` sowie über 25 hartcodierte *Magic Numbers* auf.
+- **Status (in DGP V5.0 behoben):** In **Version 5.0** sind alle Zombies entfernt, sämtliche Szenario-Schalter und *Magic Numbers* vollständig in `CONFIG` parametrisiert und durch automatisierte Unit-Tests ([`tests/test_simulation_v5.py`](tests/test_simulation_v5.py)) abgesichert.
 
 ### E. Dynamische Trajektorien & Realism-Mode (Backlog / Nice-to-Have)
 - **Motivationsverläufe:** Erweiterung der linearen Feedback-Gleichungen um akkumulierte Desillusionsprozesse nach der Erwartungs-Wert-Theorie (Eccles & Wigfield; Heublein et al. 2017/2022).

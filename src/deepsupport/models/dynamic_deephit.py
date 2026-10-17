@@ -28,14 +28,18 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Dense, Dropout, Masking, GRU, LayerNormalization, TimeDistributed
 
 # Import metrics_logger and feature_builder
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from deepsupport.models.semester_gru import masked_binary_crossentropy, PADDING_VALUE
 from deepsupport.evaluation.metrics_logger import save_metrics, save_keras_model, plot_learning_curve, plot_roc_curve, plot_pr_curve, SurvivalEvaluator
 import deepsupport.data_engine.feature_builder as fb
 
 
 def build_dynamic_deephit_network(n_timesteps: int, n_features: int) -> Model:
-    """Erstellt ein Dual-Head GRU Competing-Risks Modell."""
+    """
+    Erstellt ein Dual-Head GRU Competing-Risks Modell mit konsistenter 3-Zustands-Softmax-Parametrisierung
+    pro Zeitschritt (0: Aktiv/Weiterstudium, 1: Dropout, 2: Abschluss), sodass
+    h_drop(t) + h_grad(t) <= 1.0 für alle t strikt garantiert ist.
+    """
     inputs = Input(shape=(n_timesteps, n_features), name='input_sequence')
     masked = Masking(mask_value=PADDING_VALUE)(inputs)
 
@@ -45,15 +49,29 @@ def build_dynamic_deephit_network(n_timesteps: int, n_features: int) -> Model:
     x = GRU(32, return_sequences=True, dropout=0.2, name='shared_gru_2')(x)
     x = LayerNormalization(name='ln_2')(x)
 
-    # Head 1: Dropout Risk
-    d = TimeDistributed(Dense(16, activation='relu'), name='dropout_dense')(x)
-    d = Dropout(0.2)(d)
-    out_dropout = TimeDistributed(Dense(1, activation='sigmoid'), name='out_dropout')(d)
+    # Gemeinsame Competing-Risks Repräsentation + 3-Wege Softmax (Aktiv, Dropout, Abschluss)
+    h_joint = TimeDistributed(Dense(16, activation='relu'), name='joint_cr_dense')(x)
+    h_joint = Dropout(0.2)(h_joint)
+    probs_3 = TimeDistributed(Dense(3, activation='softmax'), name='competing_risks_softmax')(h_joint)
 
-    # Head 2: Graduation Event
-    g = TimeDistributed(Dense(16, activation='relu'), name='grad_dense')(x)
-    g = Dropout(0.2)(g)
-    out_grad = TimeDistributed(Dense(1, activation='sigmoid'), name='out_grad')(g)
+    # Feste lineare Selektoren auf Zustand 1 (Dropout) und Zustand 2 (Abschluss),
+    # vermeidet Lambda-Layer beim .keras-Speichern und garantiert h_drop + h_grad <= 1
+    sel_drop = Dense(
+        1,
+        use_bias=False,
+        trainable=False,
+        kernel_initializer=tf.constant_initializer([[0.0], [1.0], [0.0]]),
+        name='sel_dropout',
+    )
+    sel_grad = Dense(
+        1,
+        use_bias=False,
+        trainable=False,
+        kernel_initializer=tf.constant_initializer([[0.0], [0.0], [1.0]]),
+        name='sel_grad',
+    )
+    out_dropout = TimeDistributed(sel_drop, name='out_dropout')(probs_3)
+    out_grad = TimeDistributed(sel_grad, name='out_grad')(probs_3)
 
     model = Model(inputs=inputs, outputs=[out_dropout, out_grad], name='dynamic_deephit_competing_risks')
     return model
@@ -81,21 +99,17 @@ def train_dynamic_deephit_model(data_dir: Path = Path('src/output_dl'),
     train_idx, temp_idx = train_test_split(idx, test_size=0.30, random_state=42, stratify=(studi_events == 1).astype(int))
     val_idx, test_idx = train_test_split(temp_idx, test_size=0.50, random_state=42, stratify=(studi_events[temp_idx] == 1).astype(int))
 
-    X_train, y_train = X_seq[train_idx].copy(), y_seq[train_idx].copy()
-    X_val, y_val = X_seq[val_idx].copy(), y_seq[val_idx].copy()
-    X_test, y_test = X_seq[test_idx].copy(), y_seq[test_idx].copy()
+    y_train = y_seq[train_idx].copy()
+    y_val = y_seq[val_idx].copy()
+    y_test = y_seq[test_idx].copy()
 
-    # Skalierung
-    train_mask = X_train[:, :, 0] != PADDING_VALUE
-    val_mask = X_val[:, :, 0] != PADDING_VALUE
+    # Zentralisierte 3D-Skalierung über feature_builder
+    scaled_splits, scaler = fb.scale_3d_sequences(
+        {"train": X_seq[train_idx], "val": X_seq[val_idx], "test": X_seq[test_idx]},
+        fit_key="train",
+    )
+    X_train, X_val, X_test = scaled_splits["train"], scaled_splits["val"], scaled_splits["test"]
     test_mask = X_test[:, :, 0] != PADDING_VALUE
-
-    scaler = StandardScaler()
-    scaler.fit(X_train[train_mask])
-
-    X_train[train_mask] = scaler.transform(X_train[train_mask])
-    X_val[val_mask] = scaler.transform(X_val[val_mask])
-    X_test[test_mask] = scaler.transform(X_test[test_mask])
 
     # Targets separieren
     y_train_drop = y_train[:, :, 0:1]

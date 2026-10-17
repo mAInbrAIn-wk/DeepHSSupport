@@ -1,0 +1,78 @@
+{
+    "model_name": "dml_orthogonal_survival",
+    "mode": "standard",
+    "temporal_type": "prev",
+    "estimand_type": "HR",
+    "se_scale": "natural",
+    "hr_fachlich": 0.8475007197945948,
+    "hr_ueberfachlich": 0.97904575635267,
+    "hr_psychosozial": 0.9883138775583108,
+    "risk_reduction_pct_hr_fachlich": 15.249928020540516,
+    "risk_reduction_pct_hr_ueberfachlich": 2.0954243647330006,
+    "risk_reduction_pct_hr_psychosozial": 1.1686122441689206,
+    "ci_lower_95_asym_hr_fachlich": 0.7864670961059517,
+    "ci_upper_95_asym_hr_fachlich": 0.9132708457972077,
+    "ci_lower_95_asym_hr_ueberfachlich": 0.943498492449889,
+    "ci_upper_95_asym_hr_ueberfachlich": 1.0159322995241362,
+    "ci_lower_95_asym_hr_psychosozial": 0.9578271273691148,
+    "ci_upper_95_asym_hr_psychosozial": 1.0197709927648888,
+    "model_type": "dml_orthogonal_survival",
+    "temporal": "prev",
+    "ROC-AUC_Panel": 0.8145328711980242,
+    "PR-AUC_Panel": 0.27436733901049076,
+    "Brier_Score": 0.034094251692295074,
+    "fach": {
+        "robinson": {
+            "ate": -0.0059152205396574105,
+            "ate_se": 0.0012535593776390776,
+            "implied_hr": 0.8475007197945948,
+            "implied_hr_se": 0.032317798043717025
+        },
+        "partial": {
+            "mean_rr": 0.903380811214447,
+            "median_rr": 0.903380811214447,
+            "ate": -0.0042626154609024525
+        },
+        "isolated": {
+            "mean_rr": 0.8981671333312988,
+            "median_rr": 0.8981671333312988,
+            "ate": -0.004564338829368353
+        }
+    },
+    "uebf": {
+        "robinson": {
+            "ate": -0.0008127839832996098,
+            "ate_se": 0.0007165712724573946,
+            "implied_hr": 0.97904575635267,
+            "implied_hr_se": 0.018473800348271188
+        },
+        "partial": {
+            "mean_rr": 0.9431526064872742,
+            "median_rr": 0.9431526064872742,
+            "ate": -0.0024952227249741554
+        },
+        "isolated": {
+            "mean_rr": 0.9382664561271667,
+            "median_rr": 0.9382664561271667,
+            "ate": -0.0027669728733599186
+        }
+    },
+    "psych": {
+        "robinson": {
+            "ate": -0.0004532873296380386,
+            "ate_se": 0.0006128360761292042,
+            "implied_hr": 0.9883138775583108,
+            "implied_hr_se": 0.01579942114872039
+        },
+        "partial": {
+            "mean_rr": 0.9545475244522095,
+            "median_rr": 0.9545475244522095,
+            "ate": -0.001986694522202015
+        },
+        "isolated": {
+            "mean_rr": 0.9506750106811523,
+            "median_rr": 0.9506750106811523,
+            "ate": -0.002210786333307624
+        }
+    }
+}

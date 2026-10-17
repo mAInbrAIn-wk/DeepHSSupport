@@ -1,0 +1,13 @@
+{
+    "model_name": "landmark_representation_grade",
+    "mode": "standard",
+    "temporal_type": "flat",
+    "n_samples": 5327,
+    "r2_score": 0.7864791161319671,
+    "adj_r2": null,
+    "rmse": 0.2782060707538647,
+    "mae": 0.21743098584100443,
+    "median_ae": 0.17350054790305736,
+    "explained_variance": 0.7866424997467075,
+    "max_error": 1.179066937617675
+}

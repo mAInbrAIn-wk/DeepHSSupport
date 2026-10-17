@@ -1,0 +1,13 @@
+{
+    "model_name": "autoregressive_deep_transformer_grade",
+    "mode": "standard",
+    "temporal_type": "flat",
+    "n_samples": 120655,
+    "r2_score": 0.6913336515426636,
+    "adj_r2": null,
+    "rmse": 0.7587166337999076,
+    "mae": 0.570798933506012,
+    "median_ae": 0.4447512626647949,
+    "explained_variance": 0.6958228349685669,
+    "max_error": 3.835202217102051
+}

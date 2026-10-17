@@ -29,13 +29,14 @@ class StudyPanelDataset(Dataset):
     """
     PyTorch Dataset für 2D-Person-Semester- oder Prüfungs-Panels.
     
-    Liefert (x, duration, event) bzw. (x, target) für Survival- und Regressionsmodelle.
+    Liefert (x, t_start, duration, event) bzw. (x, target) für Survival- und Regressionsmodelle.
     """
     def __init__(
         self,
         features: np.ndarray,
         durations: np.ndarray,
         events: np.ndarray,
+        t_starts: Optional[np.ndarray] = None,
         competing_events: Optional[np.ndarray] = None,
         timesteps: Optional[np.ndarray] = None,
         weights: Optional[np.ndarray] = None,
@@ -44,6 +45,10 @@ class StudyPanelDataset(Dataset):
         self.features = torch.tensor(features, dtype=torch.float32)
         self.durations = torch.tensor(durations, dtype=torch.float32)
         self.events = torch.tensor(events, dtype=torch.float32)
+        if t_starts is not None:
+            self.t_starts = torch.tensor(t_starts, dtype=torch.float32)
+        else:
+            self.t_starts = torch.clamp(self.durations - 1.0, min=0.0)
         self.competing_events = torch.tensor(competing_events, dtype=torch.int64) if competing_events is not None else None
         self.timesteps = torch.tensor(timesteps, dtype=torch.int64) if timesteps is not None else None
         self.weights = torch.tensor(weights, dtype=torch.float32) if weights is not None else None
@@ -55,6 +60,7 @@ class StudyPanelDataset(Dataset):
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         item = {
             "x": self.features[idx],
+            "t_start": self.t_starts[idx],
             "duration": self.durations[idx],
             "event": self.events[idx],
         }
@@ -82,12 +88,14 @@ class StudySequenceDataset(Dataset):
         context: Optional[np.ndarray] = None,
         masks: Optional[np.ndarray] = None,
         student_ids: Optional[np.ndarray] = None,
+        sample_weights: Optional[np.ndarray] = None,
     ):
         self.sequences = torch.tensor(sequences, dtype=torch.float32)
         self.targets = torch.tensor(targets, dtype=torch.float32) if targets is not None else None
         self.targets_note = torch.tensor(targets_note, dtype=torch.float32) if targets_note is not None else None
         self.targets_pass = torch.tensor(targets_pass, dtype=torch.float32) if targets_pass is not None else None
         self.context = torch.tensor(context, dtype=torch.float32) if context is not None else None
+        self.sample_weights = torch.tensor(sample_weights, dtype=torch.float32) if sample_weights is not None else None
         
         if masks is not None:
             self.masks = torch.tensor(masks, dtype=torch.bool)
@@ -113,6 +121,8 @@ class StudySequenceDataset(Dataset):
             item["target_note"] = self.targets_note[idx]
         if self.targets_pass is not None:
             item["target_pass"] = self.targets_pass[idx]
+        if self.sample_weights is not None:
+            item["sample_weight"] = self.sample_weights[idx]
         return item
 
 
@@ -202,15 +212,18 @@ def prepare_panel_dataloaders(
     X_val = preprocessor.transform(val_panel[feature_cols]).astype(np.float32)
     X_test = preprocessor.transform(test_panel[feature_cols]).astype(np.float32)
 
-    # Durations und Events extrahieren
-    # Duration = t_stop (Semester), Event = target_col (1 = Dropout/Exmatrikuliert, 0 = Censored/Active)
+    # Durations, t_start und Events extrahieren
+    # Duration = t_stop (Semester), t_start = Intervallbeginn, Event = target_col
     t_train = train_panel["t_stop"].values.astype(np.float32)
+    t_start_train = train_panel["t_start"].values.astype(np.float32) if "t_start" in train_panel.columns else np.maximum(0.0, t_train - 1.0).astype(np.float32)
     e_train = train_panel[target_col].values.astype(np.float32)
 
     t_val = val_panel["t_stop"].values.astype(np.float32)
+    t_start_val = val_panel["t_start"].values.astype(np.float32) if "t_start" in val_panel.columns else np.maximum(0.0, t_val - 1.0).astype(np.float32)
     e_val = val_panel[target_col].values.astype(np.float32)
 
     t_test = test_panel["t_stop"].values.astype(np.float32)
+    t_start_test = test_panel["t_start"].values.astype(np.float32) if "t_start" in test_panel.columns else np.maximum(0.0, t_test - 1.0).astype(np.float32)
     e_test = test_panel[target_col].values.astype(np.float32)
 
     # Diskrete Zeitschritte (1 bis 16 Semester, 0-basiert: 0 bis 15 für Hazard-Bins)
@@ -227,9 +240,9 @@ def prepare_panel_dataloaders(
         ce_train = ce_val = ce_test = None
 
     # Datasets erstellen
-    train_dataset = StudyPanelDataset(X_train, t_train, e_train, competing_events=ce_train, timesteps=step_train, student_ids=train_panel["studierenden_id"].values)
-    val_dataset = StudyPanelDataset(X_val, t_val, e_val, competing_events=ce_val, timesteps=step_val, student_ids=val_panel["studierenden_id"].values)
-    test_dataset = StudyPanelDataset(X_test, t_test, e_test, competing_events=ce_test, timesteps=step_test, student_ids=test_panel["studierenden_id"].values)
+    train_dataset = StudyPanelDataset(X_train, t_train, e_train, t_starts=t_start_train, competing_events=ce_train, timesteps=step_train, student_ids=train_panel["studierenden_id"].values)
+    val_dataset = StudyPanelDataset(X_val, t_val, e_val, t_starts=t_start_val, competing_events=ce_val, timesteps=step_val, student_ids=val_panel["studierenden_id"].values)
+    test_dataset = StudyPanelDataset(X_test, t_test, e_test, t_starts=t_start_test, competing_events=ce_test, timesteps=step_test, student_ids=test_panel["studierenden_id"].values)
 
     # Reproduzierbare Worker-Initialisierung
     def _seed_worker(worker_id):
@@ -273,14 +286,17 @@ def prepare_panel_dataloaders(
         "test_dataset": test_dataset,
         "input_dim": X_train.shape[1],
         "X_train": X_train,
+        "t_start_train": t_start_train,
         "t_train": t_train,
         "e_train": e_train,
         "ce_train": ce_train,
         "X_val": X_val,
+        "t_start_val": t_start_val,
         "t_val": t_val,
         "e_val": e_val,
         "ce_val": ce_val,
         "X_test": X_test,
+        "t_start_test": t_start_test,
         "t_test": t_test,
         "e_test": e_test,
         "ce_test": ce_test,
@@ -625,12 +641,23 @@ def prepare_next_exam_dual_head_dataloaders(
     y_pass_va = y_pass[va_idx].astype(np.float32)
     y_pass_te = y_pass[te_idx].astype(np.float32)
 
+    def _student_sample_weights(s_ids: np.ndarray) -> np.ndarray:
+        uniq, cnts = np.unique(s_ids, return_counts=True)
+        cmap = dict(zip(uniq, cnts))
+        sw = np.array([1.0 / max(1, cmap[s]) for s in s_ids], dtype=np.float32)
+        sw *= len(sw) / max(float(np.sum(sw)), 1e-8)
+        return sw
+
+    sw_tr = _student_sample_weights(student_ids[tr_idx])
+    sw_va = _student_sample_weights(student_ids[va_idx])
+
     train_ds = StudySequenceDataset(
         X_hist_tr,
         context=X_ctx_tr,
         targets_note=y_grade_tr,
         targets_pass=y_pass_tr,
         student_ids=student_ids[tr_idx],
+        sample_weights=sw_tr,
     )
     val_ds = StudySequenceDataset(
         X_hist_va,
@@ -638,6 +665,7 @@ def prepare_next_exam_dual_head_dataloaders(
         targets_note=y_grade_va,
         targets_pass=y_pass_va,
         student_ids=student_ids[va_idx],
+        sample_weights=sw_va,
     )
     test_ds = StudySequenceDataset(
         X_hist_te,

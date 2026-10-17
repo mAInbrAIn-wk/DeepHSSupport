@@ -1,0 +1,302 @@
+{
+    "scenario": "S01_baseline",
+    "elapsed_seconds": 114.26,
+    "simulator_ground_truth": {
+        "dropout_rates": {
+            "A": 0.29156,
+            "B": 0.37102,
+            "C": 0.32086,
+            "D": 0.31656,
+            "E": 0.30828,
+            "F": 0.33628,
+            "G": 0.34008,
+            "H": 0.3484
+        },
+        "mean_durations": {
+            "A": 6.95582,
+            "B": 6.82436,
+            "C": 6.91546,
+            "D": 6.90624,
+            "E": 6.9244,
+            "F": 6.87044,
+            "G": 6.88228,
+            "H": 6.8654
+        },
+        "knockout_rr": {
+            "fachlich": 0.9086829146668329,
+            "ueberfachlich": 0.921026029820571,
+            "psychosozial": 0.9457635915401582,
+            "total_A_vs_B": 0.7858336477817907
+        },
+        "knockout_arr_pp": {
+            "fachlich": 2.9299999999999993,
+            "ueberfachlich": 2.500000000000002,
+            "psychosozial": 1.6720000000000013,
+            "total_A_vs_B": 7.946000000000003
+        },
+        "knockout_hr_macro": {
+            "fachlich": 0.9034104317049458,
+            "ueberfachlich": 0.9144610999404845,
+            "psychosozial": 0.9414915011113962,
+            "total_A_vs_B": 0.770981956487681
+        },
+        "standalone_rr": {
+            "fachlich": 0.9063662336262196,
+            "ueberfachlich": 0.9166082690960056,
+            "psychosozial": 0.9390329362298527
+        },
+        "standalone_arr_pp": {
+            "fachlich": 3.4739999999999993,
+            "ueberfachlich": 3.094000000000002,
+            "psychosozial": 2.262000000000003
+        },
+        "standalone_hr_macro": {
+            "fachlich": 0.9002872407166685,
+            "ueberfachlich": 0.9088942628442925,
+            "psychosozial": 0.9334195835187401
+        },
+        "att_users_count": {
+            "fachlich": 32627,
+            "ueberfachlich": 18907,
+            "psychosozial": 16891
+        },
+        "att_knockout_rr": {
+            "fachlich": 0.8535292941411718,
+            "ueberfachlich": 0.8193380546321722,
+            "psychosozial": 0.7970381160475843
+        },
+        "att_knockout_hr": {
+            "fachlich": 0.8464513900533611,
+            "ueberfachlich": 0.8053781442730391,
+            "psychosozial": 0.7873586386138078
+        },
+        "att_standalone_rr": {
+            "fachlich": 0.8603483191575537,
+            "ueberfachlich": 0.8323414969100481,
+            "psychosozial": 0.801121968874412
+        }
+    },
+    "estimators_standard": {
+        "naive_unadjusted": {
+            "fachlich": 1.4787556028343956,
+            "ueberfachlich": 1.5346368572289046,
+            "psychosozial": 0.8776159013261504
+        },
+        "extended_cox_tvc": {
+            "fachlich": 1.0091993895883473,
+            "ueberfachlich": 1.009458884187884,
+            "psychosozial": 0.9908388434736332
+        },
+        "msm_iptw_cloglog_hr": {
+            "fachlich": 0.9374242922181796,
+            "ueberfachlich": 0.9001107426035464,
+            "psychosozial": 0.8925587640923149
+        },
+        "msm_iptw_logit_or": {
+            "fachlich": 0.9288547815244659,
+            "ueberfachlich": 0.8998106855809211,
+            "psychosozial": 0.8901178864464856
+        },
+        "dml_multivariate_robinson_hr": {
+            "fachlich": 0.8641374863577178,
+            "ueberfachlich": 0.9574481248898898,
+            "psychosozial": 0.9727442623884688
+        },
+        "dml_multivariate_robinson_ate_pp": {
+            "fachlich": -0.5258798783182606,
+            "ueberfachlich": -0.16470455540103068,
+            "psychosozial": -0.10549815099376911
+        },
+        "gcomp_step_standardized_rr": {
+            "fachlich": 0.9500625210945196,
+            "ueberfachlich": 0.9181772683313667,
+            "psychosozial": 0.912944333248795
+        }
+    },
+    "estimators_oracle": {
+        "naive_unadjusted": {
+            "fachlich": 1.4787556028343956,
+            "ueberfachlich": 1.5346368572289046,
+            "psychosozial": 0.8776159013261504
+        },
+        "extended_cox_tvc": {
+            "fachlich": 1.00241697286536,
+            "ueberfachlich": 1.0038719469915052,
+            "psychosozial": 0.9886733872603989
+        },
+        "msm_iptw_cloglog_hr": {
+            "fachlich": 0.9235008693814858,
+            "ueberfachlich": 0.8889770819805396,
+            "psychosozial": 0.871546714033058
+        },
+        "msm_iptw_logit_or": {
+            "fachlich": 0.9149011144697914,
+            "ueberfachlich": 0.8876544637066216,
+            "psychosozial": 0.8669101954081976
+        },
+        "dml_multivariate_robinson_hr": {
+            "fachlich": 0.8826402108134124,
+            "ueberfachlich": 0.93652869624623,
+            "psychosozial": 0.9578663426335341
+        },
+        "dml_multivariate_robinson_ate_pp": {
+            "fachlich": -0.45426181219785877,
+            "ueberfachlich": -0.24567690233243392,
+            "psychosozial": -0.1630857696871343
+        },
+        "gcomp_step_standardized_rr": {
+            "fachlich": 0.9621397952402819,
+            "ueberfachlich": 0.9208379478811308,
+            "psychosozial": 0.9417043341898254
+        }
+    },
+    "policy_targeting_showcase": {
+        "n_test_students": 7196,
+        "baseline_no_support_dropout_pct": 34.31,
+        "full_support_100pct_dropout_pct": 26.28,
+        "max_possible_cohort_arr_pp": 8.03,
+        "policies_by_budget": {
+            "budget_10pct": {
+                "random_lottery": {
+                    "cohort_dropout_rate_pct": 33.49,
+                    "cohort_arr_pp": 0.82,
+                    "share_of_full_support_effect_pct": 10.2,
+                    "targeted_group_att_pp": 8.16,
+                    "effective_nnt": 12.3,
+                    "prevented_per_10k_cohort": 81.6,
+                    "lift_vs_random": 1.0
+                },
+                "reactive_status_quo": {
+                    "cohort_dropout_rate_pct": 32.91,
+                    "cohort_arr_pp": 1.4,
+                    "share_of_full_support_effect_pct": 17.5,
+                    "targeted_group_att_pp": 14.03,
+                    "effective_nnt": 7.1,
+                    "prevented_per_10k_cohort": 140.4,
+                    "lift_vs_random": 1.72
+                },
+                "ml_early_warning_standard": {
+                    "cohort_dropout_rate_pct": 33.44,
+                    "cohort_arr_pp": 0.88,
+                    "share_of_full_support_effect_pct": 10.9,
+                    "targeted_group_att_pp": 8.75,
+                    "effective_nnt": 11.4,
+                    "prevented_per_10k_cohort": 87.5,
+                    "lift_vs_random": 1.07
+                },
+                "causal_cate_uplift_standard": {
+                    "cohort_dropout_rate_pct": 33.34,
+                    "cohort_arr_pp": 0.97,
+                    "share_of_full_support_effect_pct": 12.1,
+                    "targeted_group_att_pp": 9.72,
+                    "effective_nnt": 10.3,
+                    "prevented_per_10k_cohort": 97.3,
+                    "lift_vs_random": 1.19
+                },
+                "oracle_latent_upper_bound": {
+                    "cohort_dropout_rate_pct": 33.42,
+                    "cohort_arr_pp": 0.89,
+                    "share_of_full_support_effect_pct": 11.1,
+                    "targeted_group_att_pp": 8.89,
+                    "effective_nnt": 11.2,
+                    "prevented_per_10k_cohort": 88.9,
+                    "lift_vs_random": 1.09
+                }
+            },
+            "budget_20pct": {
+                "random_lottery": {
+                    "cohort_dropout_rate_pct": 32.71,
+                    "cohort_arr_pp": 1.6,
+                    "share_of_full_support_effect_pct": 19.9,
+                    "targeted_group_att_pp": 7.98,
+                    "effective_nnt": 12.5,
+                    "prevented_per_10k_cohort": 159.6,
+                    "lift_vs_random": 1.0
+                },
+                "reactive_status_quo": {
+                    "cohort_dropout_rate_pct": 31.21,
+                    "cohort_arr_pp": 3.1,
+                    "share_of_full_support_effect_pct": 38.6,
+                    "targeted_group_att_pp": 15.5,
+                    "effective_nnt": 6.5,
+                    "prevented_per_10k_cohort": 309.9,
+                    "lift_vs_random": 1.94
+                },
+                "ml_early_warning_standard": {
+                    "cohort_dropout_rate_pct": 31.02,
+                    "cohort_arr_pp": 3.29,
+                    "share_of_full_support_effect_pct": 41.0,
+                    "targeted_group_att_pp": 16.47,
+                    "effective_nnt": 6.1,
+                    "prevented_per_10k_cohort": 329.3,
+                    "lift_vs_random": 2.06
+                },
+                "causal_cate_uplift_standard": {
+                    "cohort_dropout_rate_pct": 30.95,
+                    "cohort_arr_pp": 3.36,
+                    "share_of_full_support_effect_pct": 41.9,
+                    "targeted_group_att_pp": 16.82,
+                    "effective_nnt": 5.9,
+                    "prevented_per_10k_cohort": 336.3,
+                    "lift_vs_random": 2.11
+                },
+                "oracle_latent_upper_bound": {
+                    "cohort_dropout_rate_pct": 31.09,
+                    "cohort_arr_pp": 3.22,
+                    "share_of_full_support_effect_pct": 40.1,
+                    "targeted_group_att_pp": 16.12,
+                    "effective_nnt": 6.2,
+                    "prevented_per_10k_cohort": 322.4,
+                    "lift_vs_random": 2.02
+                }
+            },
+            "budget_30pct": {
+                "random_lottery": {
+                    "cohort_dropout_rate_pct": 31.91,
+                    "cohort_arr_pp": 2.4,
+                    "share_of_full_support_effect_pct": 29.9,
+                    "targeted_group_att_pp": 8.0,
+                    "effective_nnt": 12.5,
+                    "prevented_per_10k_cohort": 239.9,
+                    "lift_vs_random": 1.0
+                },
+                "reactive_status_quo": {
+                    "cohort_dropout_rate_pct": 29.71,
+                    "cohort_arr_pp": 4.6,
+                    "share_of_full_support_effect_pct": 57.3,
+                    "targeted_group_att_pp": 15.33,
+                    "effective_nnt": 6.5,
+                    "prevented_per_10k_cohort": 460.0,
+                    "lift_vs_random": 1.92
+                },
+                "ml_early_warning_standard": {
+                    "cohort_dropout_rate_pct": 29.45,
+                    "cohort_arr_pp": 4.86,
+                    "share_of_full_support_effect_pct": 60.6,
+                    "targeted_group_att_pp": 16.21,
+                    "effective_nnt": 6.2,
+                    "prevented_per_10k_cohort": 486.4,
+                    "lift_vs_random": 2.03
+                },
+                "causal_cate_uplift_standard": {
+                    "cohort_dropout_rate_pct": 29.56,
+                    "cohort_arr_pp": 4.75,
+                    "share_of_full_support_effect_pct": 59.2,
+                    "targeted_group_att_pp": 15.84,
+                    "effective_nnt": 6.3,
+                    "prevented_per_10k_cohort": 475.3,
+                    "lift_vs_random": 1.98
+                },
+                "oracle_latent_upper_bound": {
+                    "cohort_dropout_rate_pct": 29.41,
+                    "cohort_arr_pp": 4.91,
+                    "share_of_full_support_effect_pct": 61.1,
+                    "targeted_group_att_pp": 16.35,
+                    "effective_nnt": 6.1,
+                    "prevented_per_10k_cohort": 490.6,
+                    "lift_vs_random": 2.04
+                }
+            }
+        }
+    }
+}

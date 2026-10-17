@@ -1,0 +1,14 @@
+{
+    "model_name": "deep_exam_transformer_regressor",
+    "mode": "gradeblind",
+    "temporal_type": "prev",
+    "n_samples": 5314,
+    "r2_score": 0.7839215054747353,
+    "adj_r2": null,
+    "rmse": 0.27830292691830494,
+    "mae": 0.22019889779812327,
+    "median_ae": 0.18014856576919558,
+    "explained_variance": 0.7857846535027104,
+    "max_error": 1.2972424030303955,
+    "training_time_s": 384.028418302536
+}

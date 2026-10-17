@@ -30,7 +30,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Masking, GRU, TimeDistributed, LayerNormalization
 
 # Import metrics_logger and feature_builder
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from deepsupport.models.semester_gru import masked_binary_crossentropy, PADDING_VALUE
 from deepsupport.evaluation.metrics_logger import save_metrics, save_keras_model, plot_learning_curve, plot_roc_curve, plot_pr_curve, SurvivalEvaluator
 import deepsupport.data_engine.feature_builder as fb

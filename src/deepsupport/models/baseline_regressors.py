@@ -34,7 +34,7 @@ from tensorflow.keras.layers import Dense, Dropout, LayerNormalization
 from tensorflow.keras.callbacks import EarlyStopping
 
 # Import metrics_logger and feature_builder
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from deepsupport.evaluation.metrics_logger import save_metrics, plot_learning_curve, save_keras_model, RegressionEvaluator
 import deepsupport.data_engine.feature_builder as fb
 

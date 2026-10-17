@@ -1,11 +1,32 @@
 ---
 created: 2026-09-02
-last_updated: 2026-09-11
+last_updated: 2026-10-17
 status: abgeschlossen
-tags: [done, changelog, meilensteine]
+tags: [done, changelog, meilensteine, v4.2.5, v5.0]
 ---
 
 # ✅ Abgeschlossene Aufgaben
+
+## 2026-10-17: Post-Refactor Gesamt-Benchmark (V4.2.5), Kausales Policy-Targeting, DGP V5.0 Rollout & 23 Unit-Tests
+- [x] **Methoden- & Numerik-Refactoring (5 Arbeitspakete AP 1 – AP 5):**
+  - **AP 1 (Survival-Mathematik):** Breslow Log-Sum-Exp Trick + Counting-Process Left-Truncation ($t_{\text{start},j} < t_i \le t_{\text{stop},j}$) in `extended_deepsurv.py`, `deep_survival.py` und `survival.py` (behebt Float32-Underflow: Keras Extended DeepSurv springt von `ROC-AUC = 0.5621` auf `0.7852` Standard / `0.8692` Oracle, `C-Index = 0.9039`). 3-Zustands-Softmax (`Survive`, `Dropout`, `Graduation`) und Dropout-CIF $F_1(\tau)$ in `dynamic_deephit.py` (`ROC-AUC: 0.5924 -> 0.8920`).
+  - **AP 2 (Kausalinferenz & Cluster-Inferenz):** Gemeinsamer multivariater Robinson-Schätzer $\hat{\theta} = (\tilde{A}^\top \tilde{A})^{-1} \tilde{A}^\top \tilde{Y}$, student-geclusterte Liang-Zeger Sandwich-Standardfehler und multinomialer Cluster-Multiplizitäts-Bootstrap (`rng.multinomial` statt deduplizierendem `.isin()`).
+  - **AP 3 (Sequenzskalierung & Hurdle-Regression):** `scale_3d_sequences` für alle Keras-3D-Tensormodelle aktiviert; `SinCosPositionalEncoding` propagiert `_keras_mask`; zweistufige Hurdle-Architektur (`graduates_only=True`) für die Abschlussnoten-Regression (`MLP-Regressor R²: 0.5223 -> 0.8695`).
+  - **AP 4 (Evaluatoren):** Skalen-getreue Konfidenzintervalle im `CausalEvaluator` (Log-Skala für `HR`/`RR` vs. lineare Skala für `ATE`/`ARR`).
+  - **AP 5 (Kausaler Ground-Truth Benchmark & KI-Policy-Targeting):** `causal_ground_truth_benchmark.py` und Bericht `causal_ground_truth_benchmark.md` (Nachweis von $2{,}39\times$ mehr verhinderten Studienabbrüchen durch KI-gestütztes Targeting gegenüber Gießkannen-Allokation).
+- [x] **Vollständiger Post-Refactor Gesamt-Benchmark (`V4.2.5`, 34 Schritte):**
+  - Alle >25 Modelle über sämtliche 6 Modellfamilien auf `S01_baseline` neu trainiert und in [`modell_gegenueberstellung_gesamt_v425.md`](docs/03_evaluations_and_benchmarks/modell_gegenueberstellung_gesamt_v425.md) dokumentiert.
+- [x] **Upgrade des Simulators auf DGP Version 5.0 (`config.py`, `engine.py`):**
+  - Entfernung aller 3 historischen Zombie-Parameter, Explizierung aller 5 Szenario-Schalter und Parametrisierung aller >25 *Magic Numbers*.
+  - Empirische Rekalibrierung: $\kappa_{\text{Motivation}} = 9{,}0$ ($\sigma_{\text{total}} = 0{,}1637$), Zero-Inflated Beta Erwerbstätigkeit nach 22. DSW-Sozialerhebung ($37{,}3\,\%$ bei $0\,\text{h}$, Median $15{,}0\,\text{h}$), $28\,\%$ Migrationsquote und Destatis-Frauenanteile pro Studiengang.
+- [x] **Automatisierte Unit-Test-Suite (`tests/`, 23 Tests):**
+  - 23 Unit-Tests über alle 5 Testmodule (`test_survival_losses.py`, `test_causal_estimators.py`, `test_data_splits_and_scaling.py`, `test_metrics_logger.py`, `test_simulation_v5.py`) laufen in `14,05s` fehlerfrei durch (`OK`).
+
+## 2026-09-12: $2^4$-Architektur-Ablationsstudie & Multi-Mode LXC Kausal-Benchmark
+- [x] **$2^4$-Faktorielle Architektur-Ablation Keras 3 vs. PyTorch 2.x (`ablationsstudie_2x4_keras_vs_pytorch_ergebnisse.md`):**
+  - Empirische Dekonstruktion aller 16 Faktorkombinationen (Recurrent State Decay, Pre-LayerNorm, Logits-Loss, AdamW).
+- [x] **Multi-Mode LXC Kausal-Benchmark (`pytorch_lxc_causal_multi_mode_evaluation_v42.md`):**
+  - Vollständige Auswertung über 4 Informationsmodi (`inside_view`, `realistic`, `gradeblind_oracle`, `blind`) und 6 Szenarien.
 
 ## 2026-09-11: PyTorch & PyCox Modeling Suite, LXC Multiscenario Benchmark & Pipeline Audit
 - [x] **PyTorch 2.x & PyCox Modeling Suite (`src/deepsupport/models/torch/`):**

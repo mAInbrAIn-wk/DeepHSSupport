@@ -25,7 +25,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, BatchNormalization
 
 # Import metrics_logger and feature_builder
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from deepsupport.evaluation.metrics_logger import save_metrics, save_keras_model
 import deepsupport.data_engine.feature_builder as fb
 

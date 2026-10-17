@@ -10,6 +10,7 @@ def ensure_dir(directory: Path):
         directory.mkdir(parents=True, exist_ok=True)
 
 def get_output_dirs(base_dir: Path):
+    base_dir = Path(base_dir)
     if 'OUTPUT_DIR' in os.environ and os.environ['OUTPUT_DIR']:
         env_out = Path(os.environ['OUTPUT_DIR'])
         base_dir_str = str(base_dir).lower()
@@ -26,6 +27,16 @@ def get_output_dirs(base_dir: Path):
 def _clean_numeric(v):
     if v is None:
         return None
+    if isinstance(v, bool):
+        return bool(v)
+    if isinstance(v, (int, np.integer)):
+        return int(v)
+    if isinstance(v, dict):
+        return {str(k): _clean_numeric(val) for k, val in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_clean_numeric(val) for val in v]
+    if isinstance(v, str):
+        return v
     try:
         val = float(v)
         if np.isnan(val) or np.isinf(val):
@@ -34,10 +45,39 @@ def _clean_numeric(v):
     except Exception:
         return str(v)
 
-def save_metrics(model_name: str, metrics: dict, base_dir: Path, mode: str = 'standard', temporal_type: str = 'flat', report_str: str = None):
+def _strip_mode_temporal_suffix(model_name: str, mode: str, temporal_type: str) -> str:
+    name = str(model_name)
+    for suffix in (f"_{temporal_type}_{mode}", f"_{mode}_{temporal_type}"):
+        if name.endswith(suffix):
+            return name[:-len(suffix)]
+    if mode and name.endswith(f"_{mode}"):
+        return name[:-len(f"_{mode}")]
+    return name
+
+def save_metrics(
+    model_name: str = None,
+    metrics: dict = None,
+    base_dir: Path = Path('src/output_dl'),
+    mode: str = 'standard',
+    temporal_type: str = 'flat',
+    report_str: str = None,
+    **kwargs,
+):
+    if metrics is None and 'metrics_dict' in kwargs:
+        metrics = kwargs['metrics_dict']
     metrics_dir, _, _ = get_output_dirs(base_dir)
-    clean_metrics = {k: _clean_numeric(v) for k, v in metrics.items()}
-    json_path = metrics_dir / f"{model_name}_{mode}_{temporal_type}_metrics.json"
+    clean_metrics = {k: _clean_numeric(v) for k, v in (metrics or {}).items()}
+    clean_name = _strip_mode_temporal_suffix(model_name, mode, temporal_type)
+    json_path = metrics_dir / f"{clean_name}_{mode}_{temporal_type}_metrics.json"
+    if json_path.exists():
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                existing = json.load(f)
+            if isinstance(existing, dict) and 'model_name' in existing:
+                # Preserve standardized OOP Evaluator fields while keeping legacy keys
+                clean_metrics = {**clean_metrics, **existing}
+        except Exception:
+            pass
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(clean_metrics, f, indent=4, ensure_ascii=False)
 
@@ -194,6 +234,33 @@ class _BaseEvaluator:
         self.temporal = kwargs.get('temporal') or kwargs.get('temporal_type') or 'flat'
         self.mode = kwargs.get('mode', 'standard')
         self.extra_init_kwargs = kwargs
+
+    def _clean_model_name(self, mode: str, temporal_type: str) -> str:
+        """Entfernt versehentlich doppelt angehängte Mode/Temporal-Suffixe aus model_name."""
+        name = self.model_name
+        for suffix in (f"_{temporal_type}_{mode}", f"_{mode}_{temporal_type}"):
+            if name.endswith(suffix):
+                return name[:-len(suffix)]
+        if mode and name.endswith(f"_{mode}"):
+            return name[:-len(f"_{mode}")]
+        return name
+
+    def _write_merged_json(self, clean: dict, mode: str, temporal_type: str) -> Path:
+        metrics_dir, _, _ = get_output_dirs(self.base_dir)
+        clean_name = self._clean_model_name(mode, temporal_type)
+        path = metrics_dir / f"{clean_name}_{mode}_{temporal_type}_metrics.json"
+        if path.exists():
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    existing = json.load(f)
+                if isinstance(existing, dict):
+                    clean = {**existing, **clean}
+            except Exception:
+                pass
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(clean, f, indent=4, ensure_ascii=False)
+        print(f"[INFO] Metriken gespeichert: {path}")
+        return path
 
 
 class SurvivalEvaluator(_BaseEvaluator):
@@ -357,13 +424,8 @@ class SurvivalEvaluator(_BaseEvaluator):
         return metrics_dict
 
     def _save(self, metrics_dict, mode, temporal_type):
-        metrics_dir, _, _ = get_output_dirs(self.base_dir)
-        clean = {k: (_clean_numeric(v) if not isinstance(v, str) else v)
-                 for k, v in metrics_dict.items()}
-        path = metrics_dir / f"{self.model_name}_{mode}_{temporal_type}_metrics.json"
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(clean, f, indent=4, ensure_ascii=False)
-        print(f"[INFO] Metriken gespeichert: {path}")
+        clean = {k: _clean_numeric(v) for k, v in metrics_dict.items()}
+        self._write_merged_json(clean, mode, temporal_type)
 
     def _plot_roc(self, y_true, y_prob, roc_auc_val):
         _, plots_dir, _ = get_output_dirs(self.base_dir)
@@ -517,13 +579,8 @@ class RegressionEvaluator(_BaseEvaluator):
         return metrics_dict
 
     def _save(self, metrics_dict, mode, temporal_type):
-        metrics_dir, _, _ = get_output_dirs(self.base_dir)
-        clean = {k: (_clean_numeric(v) if not isinstance(v, str) else v)
-                 for k, v in metrics_dict.items()}
-        path = metrics_dir / f"{self.model_name}_{mode}_{temporal_type}_metrics.json"
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(clean, f, indent=4, ensure_ascii=False)
-        print(f"[INFO] Metriken gespeichert: {path}")
+        clean = {k: _clean_numeric(v) for k, v in metrics_dict.items()}
+        self._write_merged_json(clean, mode, temporal_type)
 
     def _plot_parity(self, y_true, y_pred, r2, rmse):
         _, plots_dir, _ = get_output_dirs(self.base_dir)
@@ -627,25 +684,32 @@ class MulticlassEvaluator(_BaseEvaluator):
             except Exception as e:
                 print(f"[WARN] ROC-AUC OvR: {e}")
 
-        # PR-AUC pro Klasse (One-vs-Rest)
+        # PR-AUC & Baseline-Prävalenz pro Klasse (One-vs-Rest)
         per_class_pr_auc = {}
-        if y_prob_matrix is not None:
-            n_cols = y_prob_matrix.shape[1]
-            for i, cls_name in enumerate(classes[:n_cols]):
-                y_bin = (y_true == unique_classes[i]).astype(int)
-                if y_bin.sum() > 0:
-                    per_class_pr_auc[f"pr_auc_{cls_name}"] = float(
-                        average_precision_score(y_bin, y_prob_matrix[:, i])
-                    )
+        per_class_prevalence = {}
+        for i, cls_name in enumerate(classes):
+            y_bin = (y_true == unique_classes[i]).astype(int)
+            per_class_prevalence[cls_name] = float(np.mean(y_bin))
+            if y_prob_matrix is not None and i < y_prob_matrix.shape[1] and y_bin.sum() > 0:
+                per_class_pr_auc[f"pr_auc_{cls_name}"] = float(
+                    average_precision_score(y_bin, y_prob_matrix[:, i])
+                )
 
         report = classification_report(
             y_true, y_pred, target_names=classes,
             output_dict=True, zero_division=0,
         )
-        per_class = {
-            cls: {k: round(float(v), 4) for k, v in report[cls].items()}
-            for cls in classes if cls in report
-        }
+        per_class = {}
+        for cls in classes:
+            if cls in report:
+                cls_entry = {k: round(float(v), 4) for k, v in report[cls].items()}
+                cls_entry["prevalence_baseline"] = round(per_class_prevalence.get(cls, 0.0), 4)
+                cls_entry["pr_auc"] = (
+                    round(per_class_pr_auc[f"pr_auc_{cls}"], 4)
+                    if f"pr_auc_{cls}" in per_class_pr_auc
+                    else None
+                )
+                per_class[cls] = cls_entry
 
         metrics_dict = {
             "model_name": self.model_name,
@@ -659,6 +723,7 @@ class MulticlassEvaluator(_BaseEvaluator):
             "balanced_accuracy": bal_acc,
             **per_class_pr_auc,
             "per_class": per_class,
+            "per_class_metrics": per_class,
         }
 
         if extra_metrics:
@@ -673,19 +738,8 @@ class MulticlassEvaluator(_BaseEvaluator):
         return metrics_dict
 
     def _save(self, metrics_dict, mode, temporal_type):
-        metrics_dir, _, _ = get_output_dirs(self.base_dir)
-        clean = {}
-        for k, v in metrics_dict.items():
-            if isinstance(v, dict):
-                clean[k] = v
-            elif isinstance(v, str):
-                clean[k] = v
-            else:
-                clean[k] = _clean_numeric(v)
-        path = metrics_dir / f"{self.model_name}_{mode}_{temporal_type}_metrics.json"
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(clean, f, indent=4, ensure_ascii=False)
-        print(f"[INFO] Metriken gespeichert: {path}")
+        clean = {k: _clean_numeric(v) for k, v in metrics_dict.items()}
+        self._write_merged_json(clean, mode, temporal_type)
 
     def _plot_cm(self, y_true, y_pred, class_names):
         from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
@@ -721,16 +775,28 @@ class MulticlassEvaluator(_BaseEvaluator):
 
 class CausalEvaluator(_BaseEvaluator):
     """
-    Evaluator für kausale Effektschätzer (HR, RR, DML, kontrafaktische Analysen).
+    Evaluator für kausale Effektschätzer (HR, OR, RR, ATE, DML, kontrafaktische Analysen).
 
+    Unterstützt explizite Estimand-Typen (estimand_type: 'HR', 'OR', 'RR', 'ATE')
+    und Standardfehler-Skalen (se_scale: 'log' oder 'natural').
     Berechnet und vergleicht BEIDE CI-Methoden:
-      1. Asymptotische CIs (Delta-Methode auf log(HR)-Skala; schnell)
-      2. Bootstrap CIs (Percentile-Methode; präziser, aber langsamer)
+      1. Asymptotische CIs (Log-Skala für Ratio-Estimands HR/OR/RR inkl. Delta-Methode bei se_scale='natural';
+         additive Skala für Differenz-Estimands ATE/ARR)
+      2. Bootstrap CIs (Percentile-Methode)
     Plot: Forest-Plot aller Treatment-Effekte mit CI-Fehlerbalken
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, estimand_type: str = "HR", se_scale: str = "log", **kwargs):
         super().__init__(*args, **kwargs)
+        self.estimand_type = str(estimand_type).upper()
+        self.se_scale = str(se_scale).lower()
+
+    @staticmethod
+    def _is_additive_key(k: str, default_estimand: str) -> bool:
+        kl = k.lower()
+        if default_estimand.upper() in ("ATE", "ARR", "DIFF"):
+            return True
+        return any(tok in kl for tok in ("_ate", "ate_", "_arr", "arr_"))
 
     def evaluate_and_log(
         self,
@@ -740,40 +806,58 @@ class CausalEvaluator(_BaseEvaluator):
         mode: str = None,
         temporal_type: str = None,
         extra_metrics: dict = None,
+        estimand_type: str = None,
+        se_scale: str = None,
         **kwargs
     ) -> dict:
         """
         Parameters
         ----------
         hr_estimates     : {'hr_fachlich': 0.88, 'hr_ueberfachlich': 0.95, ...}
-        hr_se            : Standard-Fehler für asymptotische CIs (auf HR-Skala)
+        hr_se            : Standard-Fehler für asymptotische CIs (Alias: asymptotic_se)
         bootstrap_samples: Array shape (n_bootstrap, n_treatments) für Bootstrap-CIs
+        estimand_type    : 'HR' (Default), 'OR', 'RR' oder 'ATE'
+        se_scale         : 'log' (Default: SE auf log(HR)-Skala) oder 'natural' (SE auf Originalskala)
         """
         mode = mode or self.mode
         temporal_type = temporal_type or self.temporal
+        est_type = (estimand_type or self.estimand_type or "HR").upper()
+        scale_mode = (se_scale or self.se_scale or "log").lower()
+        if hr_se is None and 'asymptotic_se' in kwargs:
+            hr_se = kwargs['asymptotic_se']
+
         metrics_dict = {
-            "model_name": self.model_name,
+            "model_name": self._clean_model_name(mode, temporal_type),
             "mode": mode,
             "temporal_type": temporal_type,
+            "estimand_type": est_type,
+            "se_scale": scale_mode,
         }
         metrics_dict.update({k: _clean_numeric(v) for k, v in hr_estimates.items()})
 
-        # Risk Reduction % für alle HR-Felder
+        # Risk Reduction % nur für Ratio-Estimands (HR, OR, RR), nicht für additive Größen (ATE, ARR)
         for k, v in hr_estimates.items():
-            if v is not None:
+            if v is not None and not self._is_additive_key(k, est_type):
                 try:
                     metrics_dict[f"risk_reduction_pct_{k}"] = _clean_numeric((1.0 - float(v)) * 100.0)
                 except (TypeError, ValueError):
                     pass
 
-        # Asymptotische CIs (Delta-Methode: SE auf log(HR)-Skala)
+        # Asymptotische CIs (respektiert estimand_type und se_scale)
         if hr_se is not None:
             for k, se in hr_se.items():
                 hr_val = hr_estimates.get(k)
                 if hr_val is not None and se is not None:
-                    log_hr = np.log(max(float(hr_val), 1e-9))
-                    metrics_dict[f"ci_lower_95_asym_{k}"] = _clean_numeric(np.exp(log_hr - 1.96 * float(se)))
-                    metrics_dict[f"ci_upper_95_asym_{k}"] = _clean_numeric(np.exp(log_hr + 1.96 * float(se)))
+                    val_f = float(hr_val)
+                    se_f = float(se)
+                    if self._is_additive_key(k, est_type):
+                        metrics_dict[f"ci_lower_95_asym_{k}"] = _clean_numeric(val_f - 1.96 * se_f)
+                        metrics_dict[f"ci_upper_95_asym_{k}"] = _clean_numeric(val_f + 1.96 * se_f)
+                    else:
+                        se_log = (se_f / max(abs(val_f), 1e-9)) if scale_mode == "natural" else se_f
+                        log_hr = np.log(max(val_f, 1e-9))
+                        metrics_dict[f"ci_lower_95_asym_{k}"] = _clean_numeric(np.exp(log_hr - 1.96 * se_log))
+                        metrics_dict[f"ci_upper_95_asym_{k}"] = _clean_numeric(np.exp(log_hr + 1.96 * se_log))
 
         # Bootstrap CIs (Percentile-Methode)
         if bootstrap_samples is not None:
@@ -790,8 +874,8 @@ class CausalEvaluator(_BaseEvaluator):
             metrics_dict.update(extra_metrics)
 
         self._save(metrics_dict, mode, temporal_type)
-        self._plot_forest(hr_estimates, hr_se, bootstrap_samples)
-        
+        self._plot_forest(hr_estimates, hr_se, bootstrap_samples, est_type=est_type, scale_mode=scale_mode)
+
         # Optionale Keras-Artefakte
         k_model = kwargs.get('keras_model') or kwargs.get('model')
         if k_model is not None:
@@ -804,15 +888,10 @@ class CausalEvaluator(_BaseEvaluator):
         return metrics_dict
 
     def _save(self, metrics_dict, mode, temporal_type):
-        metrics_dir, _, _ = get_output_dirs(self.base_dir)
-        clean = {k: (_clean_numeric(v) if not isinstance(v, str) else v)
-                 for k, v in metrics_dict.items()}
-        path = metrics_dir / f"{self.model_name}_{mode}_{temporal_type}_metrics.json"
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(clean, f, indent=4, ensure_ascii=False)
-        print(f"[INFO] Metriken gespeichert: {path}")
+        clean = {k: _clean_numeric(v) for k, v in metrics_dict.items()}
+        self._write_merged_json(clean, mode, temporal_type)
 
-    def _plot_forest(self, hr_estimates, hr_se, bootstrap_samples):
+    def _plot_forest(self, hr_estimates, hr_se, bootstrap_samples, est_type: str = "HR", scale_mode: str = "log"):
         _, plots_dir, _ = get_output_dirs(self.base_dir)
         labels = [k for k, v in hr_estimates.items() if v is not None]
         values = [float(hr_estimates[k]) for k in labels]
@@ -820,22 +899,31 @@ class CausalEvaluator(_BaseEvaluator):
         if n == 0:
             return
 
+        all_additive = all(self._is_additive_key(lbl, est_type) for lbl in labels)
+        null_line = 0.0 if all_additive else 1.0
+
         y_pos = np.arange(n)
         fig, ax = plt.subplots(figsize=(10, max(4, n * 1.3)))
-        ax.axvline(1.0, color='grey', linestyle='--', lw=1.5, label='Kein Effekt (HR=1)')
+        ax.axvline(null_line, color='grey', linestyle='--', lw=1.5, label=f'Kein Effekt ({est_type}={null_line:g})')
 
         for i, (lbl, val) in enumerate(zip(labels, values)):
             lo, hi = None, None
-            # Bootstrap CIs bevorzugt
+            is_add = self._is_additive_key(lbl, est_type)
             if bootstrap_samples is not None and i < (bootstrap_samples.shape[1] if bootstrap_samples.ndim > 1 else 1):
                 col = bootstrap_samples[:, i] if bootstrap_samples.ndim > 1 else bootstrap_samples
                 lo, hi = float(np.percentile(col, 2.5)), float(np.percentile(col, 97.5))
             elif hr_se is not None and lbl in hr_se and hr_se[lbl] is not None:
-                log_v = np.log(max(val, 1e-9))
-                lo = float(np.exp(log_v - 1.96 * float(hr_se[lbl])))
-                hi = float(np.exp(log_v + 1.96 * float(hr_se[lbl])))
+                se_f = float(hr_se[lbl])
+                if is_add:
+                    lo, hi = val - 1.96 * se_f, val + 1.96 * se_f
+                else:
+                    se_log = (se_f / max(abs(val), 1e-9)) if scale_mode == "natural" else se_f
+                    log_v = np.log(max(val, 1e-9))
+                    lo = float(np.exp(log_v - 1.96 * se_log))
+                    hi = float(np.exp(log_v + 1.96 * se_log))
 
-            color = 'steelblue' if val < 1.0 else 'tomato'
+            thresh = 0.0 if is_add else 1.0
+            color = 'steelblue' if val < thresh else 'tomato'
             ax.plot(val, y_pos[i], 'o', color=color, markersize=10, zorder=5)
             if lo is not None and hi is not None:
                 ax.plot([lo, hi], [y_pos[i], y_pos[i]], '-', color=color, lw=2.5, zorder=4)
@@ -843,7 +931,7 @@ class CausalEvaluator(_BaseEvaluator):
 
         ax.set_yticks(y_pos)
         ax.set_yticklabels([lbl.replace('_', ' ') for lbl in labels], fontsize=9)
-        ax.set_xlabel('Hazard Ratio / Relative Risk')
+        ax.set_xlabel(f'Causal Effect ({est_type})')
         ax.set_title(f'Forest Plot: {self.model_name}')
         ax.legend(); ax.grid(True, alpha=0.3, axis='x')
         plt.tight_layout()
@@ -852,8 +940,9 @@ class CausalEvaluator(_BaseEvaluator):
 
     def _print_summary(self, m, hr_estimates):
         w = 70
+        est_type = m.get('estimand_type', 'HR')
         print(f"\n{'='*w}")
-        print(f"  CausalEvaluator -- {m['model_name']} [{m['mode']}/{m['temporal_type']}]")
+        print(f"  CausalEvaluator -- {m['model_name']} [{m['mode']}/{m['temporal_type']}] ({est_type})")
         print(f"{'='*w}")
         for k, v in hr_estimates.items():
             if v is None:
@@ -864,12 +953,13 @@ class CausalEvaluator(_BaseEvaluator):
             lo_a = m.get(f"ci_lower_95_asym_{k}")
             hi_a = m.get(f"ci_upper_95_asym_{k}")
             ci_str = ""
-            if lo_b and hi_b:
+            if lo_b is not None and hi_b is not None:
                 ci_str = f"  Boot-95%-CI=[{lo_b:.3f}, {hi_b:.3f}]"
-            elif lo_a and hi_a:
+            elif lo_a is not None and hi_a is not None:
                 ci_str = f"  Asym-95%-CI=[{lo_a:.3f}, {hi_a:.3f}]"
-            rr_str = f"  (RR-Senkung: {rr:.1f}%)" if rr else ""
-            print(f"  {k:<35}: HR={float(v):.4f}{rr_str}{ci_str}")
+            rr_str = f"  (RR-Senkung: {rr:.1f}%)" if rr is not None else ""
+            lbl_est = "ATE" if self._is_additive_key(k, est_type) else est_type
+            print(f"  {k:<35}: {lbl_est}={float(v):.4f}{rr_str}{ci_str}")
         if m.get('training_time_s') is not None:
             print(f"  Training Time                      : {m['training_time_s']:.2f}s")
         print(f"{'='*w}\n")
@@ -918,6 +1008,8 @@ class DualHeadEvaluator(_BaseEvaluator):
         history          : Keras history.history (für gemeinsame Lernkurve; optional)
         model            : Keras-Modell-Objekt (wird einmalig gespeichert; optional)
         """
+        mode = mode or self.mode
+        temporal_type = temporal_type or self.temporal
         reg_metrics = self._reg.evaluate_and_log(
             y_grade_true, y_grade_pred,
             n_features=n_features_grade,
@@ -933,7 +1025,11 @@ class DualHeadEvaluator(_BaseEvaluator):
         )
 
         # Kombinierte JSON mit Präfix
-        combined = {"model_name": self.model_name, "mode": mode, "temporal_type": temporal_type}
+        combined = {
+            "model_name": self._clean_model_name(mode, temporal_type),
+            "mode": mode,
+            "temporal_type": temporal_type,
+        }
         for k, v in reg_metrics.items():
             if k not in ("model_name", "mode", "temporal_type"):
                 combined[f"grade_{k}"] = v
@@ -950,15 +1046,12 @@ class DualHeadEvaluator(_BaseEvaluator):
         if extra_metrics:
             combined.update(extra_metrics)
 
-        metrics_dir, _, _ = get_output_dirs(self.base_dir)
-        clean = {k: (_clean_numeric(v) if not isinstance(v, (str, dict)) else v)
-                 for k, v in combined.items()}
-        path = metrics_dir / f"{self.model_name}_{mode}_{temporal_type}_metrics.json"
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(clean, f, indent=4, ensure_ascii=False)
+        clean = {k: _clean_numeric(v) for k, v in combined.items()}
+        path = self._write_merged_json(clean, mode, temporal_type)
 
         if model is not None:
             save_keras_model(model, self.model_name, self.base_dir)
 
         print(f"\n[OK] DualHeadEvaluator: Kombinierte Metriken gespeichert -> {path}")
         return combined
+

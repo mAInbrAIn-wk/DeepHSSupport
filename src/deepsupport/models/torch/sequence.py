@@ -235,9 +235,11 @@ class PyTorchExamGRU(nn.Module):
 
 class PyTorchDynamicDeepHit(nn.Module):
     """
-    Diskretes Dynamic DeepHit für Longitudinalverläufe.
-    Modelliert die bedingte Wahrscheinlichkeitsmasse f(t | X_{1..tau}) über diskrete Zeitschritte.
-    Verwendet Joint NLL + Cause-Specific Ranking Loss.
+    Strikter kausaler Dynamic DeepHit für Longitudinalverläufe (Lee et al., 2018).
+    Berechnet an jedem Semester-Zeitschritt t aus dem unidirektionalen (kausalen) GRU-Zustand h_t
+    den bedingten Intervall-Hazard h(t | X_{1..t}) (ohne Future-Pooling über zukünftige Semester)
+    und kombiniert die maskierte Intervall-Log-Likelihood mit dem paarweisen Konkordanz-Ranking-Loss
+    auf der kumulativen Inzidenz F_i(T_i) vs. F_j(T_i) zum Ereigniszeitpunkt T_i (für Paare mit e_i=1 und T_i < T_j).
     """
     def __init__(
         self,
@@ -245,7 +247,7 @@ class PyTorchDynamicDeepHit(nn.Module):
         max_duration: int = 16,
         hidden_dim: int = 64,
         dropout: float = 0.2,
-        alpha_rank: float = 0.5,
+        alpha_rank: float = 0.1,
         sigma_rank: float = 0.1,
     ):
         super().__init__()
@@ -256,72 +258,67 @@ class PyTorchDynamicDeepHit(nn.Module):
 
         self.input_proj = nn.Linear(feat_dim, hidden_dim)
         self.norm1 = nn.LayerNorm(hidden_dim)
-        self.gru = nn.GRU(hidden_dim, hidden_dim, batch_first=True)
+        self.gru1 = nn.GRU(hidden_dim, hidden_dim, batch_first=True)
         self.norm2 = nn.LayerNorm(hidden_dim)
+        self.gru2 = nn.GRU(hidden_dim, hidden_dim // 2, batch_first=True)
+        self.norm3 = nn.LayerNorm(hidden_dim // 2)
 
-        self.pooler = AttentionPooling(d_model=hidden_dim)
-
-        self.pmf_head = nn.Sequential(
-            nn.Linear(hidden_dim, 64),
-            nn.LayerNorm(64),
+        self.hazard_head = nn.Sequential(
+            nn.Linear(hidden_dim // 2, 16),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(64, max_duration),
+            nn.Linear(16, 1),
         )
 
-    def forward(self, sequence: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """
-        Rückgabe: (N, max_duration) PMF f(t) mit sum_t f(t) <= 1 via Softmax
-        """
+    def forward_logits(self, sequence: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Kausale Zeitschritt-Logits (N, S) ausschließlich aus der Historie X_{1..t}."""
         h = self.input_proj(sequence)
         h = self.norm1(h)
-        h, _ = self.gru(h)
+        h, _ = self.gru1(h)
         h = self.norm2(h)
+        h, _ = self.gru2(h)
+        h = self.norm3(h)
+        return self.hazard_head(h).squeeze(-1)
 
-        pooled = self.pooler(h, mask=mask)
-        logits = self.pmf_head(pooled)
-        pmf = F.softmax(logits, dim=-1)
-        return pmf
+    def forward(self, sequence: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Gibt den kausalen bedingten Intervall-Hazard h_t(X_{1..t}) in (0, 1) zurück (Shape: N, S)."""
+        return torch.sigmoid(self.forward_logits(sequence, mask=mask))
 
     def compute_loss(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         seq = batch["sequence"]
         y_true = batch["target"]  # (N, S)
-        mask = batch.get("mask")
+        valid_mask = (y_true != fb.PADDING_VALUE)
+        if valid_mask.sum() == 0:
+            return torch.tensor(0.0, device=seq.device, requires_grad=True)
 
-        pmf = self.forward(seq, mask=mask)  # (N, max_duration)
-        cif = torch.cumsum(pmf, dim=-1)     # F(t)
+        logits = self.forward_logits(seq)
+        nll_loss = F.binary_cross_entropy_with_logits(logits[valid_mask], y_true[valid_mask])
 
-        # Letzter beobachteter Zeitschritt und Event-Status
-        lengths = (y_true != fb.PADDING_VALUE).sum(dim=1).clamp(min=1)  # (N,)
-        last_idx = (lengths - 1).clamp(max=self.max_duration - 1)
+        # Kausale kumulative Inzidenz F(t | X_{1..t}) = 1 - prod_{u <= t} (1 - h_u)
+        hazards = torch.sigmoid(logits) * valid_mask.float()
+        surv = torch.cumprod(1.0 - hazards + 1e-7, dim=-1)
+        cif = 1.0 - surv  # (N, S)
 
-        # Event an letztem Zeitschritt
+        lengths = valid_mask.sum(dim=1).clamp(min=1)
+        last_idx = (lengths - 1).clamp(max=seq.size(1) - 1)
         row_indices = torch.arange(len(y_true), device=seq.device)
-        event = (y_true[row_indices, last_idx] == 1.0).float()  # 1 falls Dropout, 0 falls zensiert
+        event = (y_true[row_indices, last_idx] == 1.0).float()
 
-        # NLL Loss
-        eps = 1e-7
-        p_event = pmf[row_indices, last_idx] + eps
-        s_censor = (1.0 - cif[row_indices, last_idx]).clamp(min=eps)
-
-        log_lik = event * torch.log(p_event) + (1.0 - event) * torch.log(s_censor)
-        nll_loss = -torch.mean(log_lik)
-
-        # Ranking Loss (über Event-Paare i mit T_i < T_j)
+        # Paarweiser Konkordanz-Ranking-Loss nach Lee et al. (2018) zum Zeitpunkt T_i: F_i(T_i) vs. F_j(T_i)
         durations = last_idx.float()
         dur_diff = durations.unsqueeze(1) - durations.unsqueeze(0)  # T_i - T_j
-        event_mask = (event.unsqueeze(1) == 1.0) & (dur_diff < 0)  # T_i < T_j and e_i == 1
+        pair_mask = (event.unsqueeze(1) == 1.0) & (dur_diff < 0)    # e_i == 1 und T_i < T_j
 
-        if event_mask.sum() > 0:
-            # CIF_i(T_i) vs CIF_j(T_i)
-            cif_ti = cif[row_indices, last_idx]  # (N,)
-            cif_diff = cif_ti.unsqueeze(0) - cif_ti.unsqueeze(1)  # F_j(T_i) - F_i(T_i)
-            # Ranking-Loss: Bestraft wenn F_i(T_i) <= F_j(T_i)
-            rank_loss = torch.exp(cif_diff / self.sigma_rank)[event_mask].mean()
+        if pair_mask.sum() > 0:
+            n_batch = len(y_true)
+            cif_i_at_ti = cif[row_indices, last_idx].unsqueeze(1).expand(-1, n_batch)  # F_i(T_i)
+            t_i_idx = last_idx.unsqueeze(1).expand(-1, n_batch)
+            cif_j_at_ti = cif[torch.arange(n_batch, device=seq.device).unsqueeze(0).expand(n_batch, -1), t_i_idx]  # F_j(T_i)
+            rank_loss = torch.exp(-(cif_i_at_ti - cif_j_at_ti) / self.sigma_rank)[pair_mask].mean()
         else:
             rank_loss = torch.tensor(0.0, device=seq.device)
 
-        return nll_loss + self.alpha_rank * rank_loss
+        return (1.0 - self.alpha_rank) * nll_loss + self.alpha_rank * rank_loss
 
 
 def train_torch_sequence_survival_model(
@@ -462,33 +459,21 @@ def train_torch_sequence_survival_model(
     y_test = data["y_test"]                          # (N, max_len)
     test_mask = (y_test != fb.PADDING_VALUE)
 
-    if isinstance(model, PyTorchDynamicDeepHit):
-        # Bei Dynamic DeepHit ist preds_test die PMF f(t) -> kumulatives CIF F(t)
-        cif_test = np.clip(np.cumsum(preds_test, axis=-1), 0.0, 1.0)
-        # Aggregiertes Studierenden-Risiko = CIF am letzten beobachteten Zeitschritt
-        test_student_events = data["test_student_events"]
-        lengths = np.sum(test_mask, axis=1).clip(min=1) - 1
-        row_idx = np.arange(len(lengths))
-        pred_student_risk = cif_test[row_idx, np.clip(lengths, 0, cif_test.shape[1] - 1)]
+    # Alle Sequenz-Survival-Modelle (inkl. kausalem Dynamic DeepHit) liefern den bedingten Intervall-Hazard h_t
+    h_test = preds_test
+    y_flat = y_test[test_mask].flatten()
+    p_flat = h_test[test_mask].flatten()
 
-        y_flat = y_test[test_mask].flatten()
-        p_flat = cif_test[test_mask].flatten()
-    else:
-        # Bei Hazard-Modellen ist preds_test der bedingte Hazard h_t
-        h_test = preds_test
-        y_flat = y_test[test_mask].flatten()
-        p_flat = h_test[test_mask].flatten()
-
-        # Aggregiertes Studierenden-Ausfallrisiko: 1 - prod(1 - h_t)
-        raw_events = data["test_student_events"]
-        test_student_events = (raw_events == 1).astype(int)
-        surv_probs = np.ones(len(y_test))
-        for i in range(len(y_test)):
-            s_len = int(np.sum(test_mask[i]))
-            if s_len > 0:
-                h_i = np.clip(h_test[i, :s_len], 1e-6, 1.0 - 1e-6)
-                surv_probs[i] = np.prod(1.0 - h_i)
-        pred_student_risk = 1.0 - surv_probs
+    # Aggregiertes Studierenden-Ausfallrisiko: 1 - prod(1 - h_t)
+    raw_events = data["test_student_events"]
+    test_student_events = (raw_events == 1).astype(int)
+    surv_probs = np.ones(len(y_test))
+    for i in range(len(y_test)):
+        s_len = int(np.sum(test_mask[i]))
+        if s_len > 0:
+            h_i = np.clip(h_test[i, :s_len], 1e-6, 1.0 - 1e-6)
+            surv_probs[i] = np.prod(1.0 - h_i)
+    pred_student_risk = 1.0 - surv_probs
 
     p_flat = np.clip(p_flat, 0.0, 1.0)
     pred_student_risk = np.clip(pred_student_risk, 0.0, 1.0)

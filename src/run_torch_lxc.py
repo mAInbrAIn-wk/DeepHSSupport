@@ -168,11 +168,12 @@ def run_scenario_universe(
             "instant_hazard_roc_auc": float(roc_auc_score(e_test, instant_h_lh)),
             "instant_hazard_pr_auc_dropout": float(average_precision_score(e_test, instant_h_lh)),
             "instant_hazard_brier": float(brier_score_loss(e_test, instant_h_lh)),
+            "cumulative_risk_roc_auc": float(roc_auc_score(e_test, risk_lh)),
         }
         print(f"    -> PyTorch LogisticHazard Paritaet: Instant-Hazard ROC-AUC = {extra_lh['instant_hazard_roc_auc']:.4f} (vs. Keras 0.8002)")
 
         ev_lh = SurvivalEvaluator(base_dir=scenario_out, model_name="torch_logistic_hazard")
-        m_lh = ev_lh.evaluate_and_log(e_test, risk_lh, t_stop=t_test, mode=mode_surv, temporal_type=temporal, fit_time_s=t_fit_lh, extra_metrics=extra_lh)
+        m_lh = ev_lh.evaluate_and_log(e_test, instant_h_lh, t_stop=t_test, mode=mode_surv, temporal_type=temporal, fit_time_s=t_fit_lh, extra_metrics=extra_lh)
         results["models"]["torch_logistic_hazard"] = m_lh
 
         # 1.2 DeepHit (Single Event)
@@ -188,10 +189,13 @@ def run_scenario_universe(
         dh_model.eval()
         with torch.no_grad():
             dh_model.to(trainer_dh.device)
-            risk_dh = dh_model.predict_risk(X_test_t, step_test.to(trainer_dh.device)).cpu().numpy()
+            step_dh_dev = step_test.to(trainer_dh.device)
+            risk_dh = dh_model.predict_risk(X_test_t, step_dh_dev).cpu().numpy()
+            instant_h_dh = dh_model.predict_step_hazard(X_test_t, step_dh_dev).cpu().numpy()
 
+        extra_dh = {"cumulative_risk_roc_auc": float(roc_auc_score(e_test, risk_dh))}
         ev_dh = SurvivalEvaluator(base_dir=scenario_out, model_name="torch_deephit")
-        m_dh = ev_dh.evaluate_and_log(e_test, risk_dh, t_stop=t_test, mode=mode_surv, temporal_type=temporal, fit_time_s=t_fit_dh)
+        m_dh = ev_dh.evaluate_and_log(e_test, instant_h_dh, t_stop=t_test, mode=mode_surv, temporal_type=temporal, fit_time_s=t_fit_dh, extra_metrics=extra_dh)
         results["models"]["torch_deephit"] = m_dh
 
         # 1.3 CoxPH (Extended DeepSurv mit Breslow)
@@ -206,9 +210,11 @@ def run_scenario_universe(
 
         cox_model.compute_baseline_hazard(X_train, t_train, e_train)
         risk_cox = cox_model.predict_risk(X_test, step_test_np)
+        instant_h_cox = cox_model.predict_step_hazard(X_test, t_test)
 
+        extra_cox = {"cumulative_risk_roc_auc": float(roc_auc_score(e_test, risk_cox))}
         ev_cox = SurvivalEvaluator(base_dir=scenario_out, model_name="torch_coxph_extended")
-        m_cox = ev_cox.evaluate_and_log(e_test, risk_cox, t_stop=t_test, mode=mode_surv, temporal_type=temporal, fit_time_s=t_fit_cox)
+        m_cox = ev_cox.evaluate_and_log(e_test, instant_h_cox, t_stop=t_test, mode=mode_surv, temporal_type=temporal, fit_time_s=t_fit_cox, extra_metrics=extra_cox)
         results["models"]["torch_coxph_extended"] = m_cox
 
         # 1.4 CoxTime
@@ -223,9 +229,11 @@ def run_scenario_universe(
 
         ct_model.compute_baseline_hazard(X_train, t_train, e_train)
         risk_ct = ct_model.predict_risk(X_test, step_test_np)
+        instant_h_ct = ct_model.predict_step_hazard(X_test, t_test)
 
+        extra_ct = {"cumulative_risk_roc_auc": float(roc_auc_score(e_test, risk_ct))}
         ev_ct = SurvivalEvaluator(base_dir=scenario_out, model_name="torch_coxtime")
-        m_ct = ev_ct.evaluate_and_log(e_test, risk_ct, t_stop=t_test, mode=mode_surv, temporal_type=temporal, fit_time_s=t_fit_ct)
+        m_ct = ev_ct.evaluate_and_log(e_test, instant_h_ct, t_stop=t_test, mode=mode_surv, temporal_type=temporal, fit_time_s=t_fit_ct, extra_metrics=extra_ct)
         results["models"]["torch_coxtime"] = m_ct
 
         # 1.5 DeepHit Competing Risks
@@ -241,18 +249,21 @@ def run_scenario_universe(
         dh_cr.eval()
         with torch.no_grad():
             dh_cr.to(trainer_cr.device)
-            risk_cr_do = dh_cr.predict_risk(X_test_t, step_test.to(trainer_cr.device), risk_idx=0).cpu().numpy()
-            risk_cr_gr = dh_cr.predict_risk(X_test_t, step_test.to(trainer_cr.device), risk_idx=1).cpu().numpy()
+            step_cr_dev = step_test.to(trainer_cr.device)
+            risk_cr_do = dh_cr.predict_risk(X_test_t, step_cr_dev, risk_idx=0).cpu().numpy()
+            risk_cr_gr = dh_cr.predict_risk(X_test_t, step_cr_dev, risk_idx=1).cpu().numpy()
+            instant_h_cr_do = dh_cr.predict_step_hazard(X_test_t, step_cr_dev, risk_idx=0).cpu().numpy()
+            instant_h_cr_gr = dh_cr.predict_step_hazard(X_test_t, step_cr_dev, risk_idx=1).cpu().numpy()
 
-        extra_cr = {}
+        extra_cr = {"cumulative_risk_roc_auc": float(roc_auc_score(e_test, risk_cr_do))}
         if ce_test is not None:
-            from sklearn.metrics import roc_auc_score, average_precision_score
             e_grad_test = (ce_test == 2).astype(float)
-            extra_cr["grad_roc_auc"] = float(roc_auc_score(e_grad_test, risk_cr_gr))
-            extra_cr["grad_pr_auc"] = float(average_precision_score(e_grad_test, risk_cr_gr))
+            extra_cr["grad_roc_auc"] = float(roc_auc_score(e_grad_test, instant_h_cr_gr))
+            extra_cr["grad_pr_auc"] = float(average_precision_score(e_grad_test, instant_h_cr_gr))
+            extra_cr["grad_cumulative_roc_auc"] = float(roc_auc_score(e_grad_test, risk_cr_gr))
 
         ev_cr = SurvivalEvaluator(base_dir=scenario_out, model_name="torch_deephit_competing_risks")
-        m_cr = ev_cr.evaluate_and_log(e_test, risk_cr_do, t_stop=t_test, mode=mode_surv, temporal_type=temporal, fit_time_s=t_fit_cr, extra_metrics=extra_cr)
+        m_cr = ev_cr.evaluate_and_log(e_test, instant_h_cr_do, t_stop=t_test, mode=mode_surv, temporal_type=temporal, fit_time_s=t_fit_cr, extra_metrics=extra_cr)
         results["models"]["torch_deephit_competing_risks"] = m_cr
 
     # 2. Transformer Suite
@@ -359,7 +370,6 @@ def run_scenario_universe(
                 h_k = np.clip(hazards_all[i, :s_len], 1e-6, 1.0 - 1e-6)
                 surv_probs[i] = np.prod(1.0 - h_k)
         risk_student = 1.0 - surv_probs
-        from sklearn.metrics import roc_auc_score, average_precision_score
         student_auc = float(roc_auc_score(test_student_events, risk_student))
         student_pr_auc = float(average_precision_score(test_student_events, risk_student))
 
@@ -407,7 +417,7 @@ def run_scenario_universe(
     # 4. Phase 4: Sequentielle Survival-Modelle (Semester- & Prüfungsverläufe)
     if include_seq:
         print("\n--- [LXC] Phase 4: Sequentielle Survival-Modelle (Semester- & Prüfungsverläufe) ---")
-        print("\n[1/3] Training PyTorchSemesterGRU...")
+        print("\n[1/4] Training PyTorchSemesterGRU...")
         res_sem_gru = train_torch_sequence_survival_model(
             model_type="semester_gru",
             data_dir=data_dir,
@@ -420,7 +430,7 @@ def run_scenario_universe(
         )
         results["models"]["torch_semester_gru"] = res_sem_gru["metrics"]
 
-        print("\n[2/3] Training PyTorchSemesterTransformer...")
+        print("\n[2/4] Training PyTorchSemesterTransformer...")
         res_sem_trans = train_torch_sequence_survival_model(
             model_type="semester_transformer",
             data_dir=data_dir,
@@ -433,7 +443,20 @@ def run_scenario_universe(
         )
         results["models"]["torch_semester_transformer"] = res_sem_trans["metrics"]
 
-        print("\n[3/3] Training PyTorchDynamicDeepHit...")
+        print("\n[3/4] Training PyTorchExamGRU...")
+        res_exam_gru = train_torch_sequence_survival_model(
+            model_type="exam_gru",
+            data_dir=data_dir,
+            output_dir=scenario_out,
+            mode=mode_surv,
+            temporal=temporal,
+            epochs=epochs_seq,
+            batch_size=256,
+            seed=seed,
+        )
+        results["models"]["torch_exam_gru"] = res_exam_gru["metrics"]
+
+        print("\n[4/4] Training PyTorchDynamicDeepHit...")
         res_ddh = train_torch_sequence_survival_model(
             model_type="dynamic_deephit",
             data_dir=data_dir,

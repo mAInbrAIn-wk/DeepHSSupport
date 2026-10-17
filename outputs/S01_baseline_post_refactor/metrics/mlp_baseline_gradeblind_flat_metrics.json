@@ -1,0 +1,52 @@
+{
+    "model_name": "mlp_baseline_gradeblind",
+    "mode": "gradeblind",
+    "temporal_type": "flat",
+    "n_samples": 7196,
+    "label_class_1": "Dropout",
+    "label_class_0": "Non-Drop",
+    "dropout_prevalence_pi0": 0.2615341856586993,
+    "roc_auc": 0.8720133831312791,
+    "pr_auc_dropout": 0.7674878484970673,
+    "pr_auc_nondropout": 0.9370009062195424,
+    "pr_auc_baseline_pi0": 0.2615341856586993,
+    "pr_auc_class_1": 0.7674878484970673,
+    "pr_auc_class_0": 0.9370009062195424,
+    "pr_auc_baseline_class_1": 0.2615341856586993,
+    "pr_auc_baseline_class_0": 0.7384658143413008,
+    "pr_auc_lift_class_1": 2.9345603388867674,
+    "pr_auc_lift_class_0": 1.2688480468866816,
+    "brier_score": 0.11415700614452362,
+    "brier_skill_score": 0.4089234759054564,
+    "f1_score": 0.6346276257161044,
+    "balanced_accuracy": 0.7401318355019944,
+    "c_index": null,
+    "Naive Bayes": {
+        "accuracy": 0.8294886047804336,
+        "f1_weighted": 0.8275838960002999,
+        "roc_auc": 0.8614273366884819,
+        "pr_auc": 0.7522477017069866,
+        "brier": 0.1395219687797051
+    },
+    "Random Forest": {
+        "accuracy": 0.820733740967204,
+        "f1_weighted": 0.815188749519291,
+        "roc_auc": 0.8338953467211309,
+        "pr_auc": 0.7089393475013156,
+        "brier": 0.1332996788591226
+    },
+    "SVM (RBF)": {
+        "accuracy": 0.8397720956086715,
+        "f1_weighted": 0.8276424306871487,
+        "roc_auc": 0.8209552734400778,
+        "pr_auc": 0.7397502126921737,
+        "brier": 0.1225356386924673
+    },
+    "Keras MLP": {
+        "accuracy": 0.8404669260700389,
+        "f1_weighted": 0.8290862998638036,
+        "roc_auc": 0.8720133831312791,
+        "pr_auc": 0.7674878484970673,
+        "brier": 0.11415700614452362
+    }
+}

@@ -124,7 +124,9 @@ class PyTorchLogisticHazard(nn.Module):
     def compute_loss(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
         Berechnet den negativen Log-Likelihood-Verlust für diskrete Hazards.
-        batch: {'x': Tensor, 'duration': Tensor (1-basiertes Semester), 'event': Tensor (0 oder 1)}
+        Unterstützt sowohl Panel-Intervalle (mit 't_start' in batch, sodass jede Zeile
+        exakt auf ihrem Intervall [t_start, duration] evaluiert wird, ohne frühere Semester
+        mehrfach zu gewichten) als auch statische Überlebensdaten (t_start = 0).
         """
         x = batch["x"]
         durations = batch["duration"]  # z. B. 1 bis 16
@@ -135,14 +137,20 @@ class PyTorchLogisticHazard(nn.Module):
 
         # 0-basierter Index des Ziel-Intervalls (0 bis num_bins - 1)
         idx_dur = torch.clamp((durations - 1).long(), 0, num_bins - 1)
+        if "t_start" in batch and batch["t_start"] is not None:
+            idx_start = torch.clamp(batch["t_start"].long(), 0, num_bins - 1)
+        else:
+            idx_start = torch.zeros_like(idx_dur)
 
-        # Erstelle Maske für Intervalle bis zum Beobachtungszeitpunkt
-        # grid: (1, num_bins), idx_dur: (N, 1)
+        # Erstelle Maske für aktive Intervalle [idx_start, idx_dur]
+        # Bei Panel-Zeilen (t_start = k-1, duration = k) ist idx_start == idx_dur == k-1,
+        # sodass jede Panel-Zeile exakt den bedingten Intervall-Hazard h_k(x_{i,k}) Beitrags-Loss liefert.
         grid = torch.arange(num_bins, device=x.device).unsqueeze(0)
+        start_expanded = idx_start.unsqueeze(1)
         dur_expanded = idx_dur.unsqueeze(1)
 
-        mask_active = (grid <= dur_expanded)  # Alle Intervalle bis zum Ereignis/Zensierung
-        
+        mask_active = (grid >= start_expanded) & (grid <= dur_expanded)
+
         # Targets: 0 für alle überlebten Intervalle (grid < dur_expanded),
         # und event (1 oder 0) genau im Ereignis-Intervall (grid == dur_expanded)
         targets = torch.zeros_like(logits)
@@ -202,6 +210,18 @@ class PyTorchDeepHit(nn.Module):
             ts = torch.clamp(timestep, 0, self.num_durations - 1)
             return cif.gather(1, ts.unsqueeze(1)).squeeze(1)
         return cif[:, -1]
+
+    def predict_step_hazard(self, x: torch.Tensor, timestep: torch.Tensor) -> torch.Tensor:
+        """
+        Gibt den bedingten Intervall-Hazard h_t(x) = f_t(x) / S_{t-1}(x) zurück.
+        """
+        pmf = self.forward(x)
+        cif = torch.cumsum(pmf, dim=1)
+        surv = torch.clamp(1.0 - cif, min=0.0, max=1.0)
+        ts = torch.clamp(timestep, 0, self.num_durations - 1)
+        f_t = pmf.gather(1, ts.unsqueeze(1)).squeeze(1)
+        s_t = surv.gather(1, ts.unsqueeze(1)).squeeze(1)
+        return f_t / torch.clamp(s_t + f_t, min=1e-7)
 
     def compute_loss(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         x = batch["x"]
@@ -266,9 +286,8 @@ class PyTorchCoxPH(nn.Module):
     Extended DeepSurv / Cox Proportional Hazards Netzwerk in reinem PyTorch.
     
     Verwendet negative Breslow Partial Likelihood mit vollständig
-    vektorisierter Summation über Risikosets und Schätzung der
-    kumulativen Baseline-Hazard-Funktion H_0(t) nach Breslow für exakt
-    kalibrierte Überlebenswahrscheinlichkeiten S(t|x) = exp(-H_0(t) exp(g(x))).
+    vektorisierter Counting-Process-Summation über Risikosets R(t_i) = {j: t_start_j < t_i <= t_stop_j}
+    und Schätzung der kumulativen Baseline-Hazard-Funktion H_0(t) nach Breslow.
     """
     def __init__(
         self,
@@ -285,6 +304,7 @@ class PyTorchCoxPH(nn.Module):
         )
         self.head = nn.Linear(self.backbone.out_features, 1)
         self.baseline_durations = None
+        self.baseline_hazards = None
         self.cum_baseline_hazards = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -297,9 +317,11 @@ class PyTorchCoxPH(nn.Module):
         x_train: Union[np.ndarray, torch.Tensor],
         durations_train: Union[np.ndarray, torch.Tensor],
         events_train: Union[np.ndarray, torch.Tensor],
+        t_start_train: Optional[Union[np.ndarray, torch.Tensor]] = None,
     ):
         """
-        Schätzt die kumulative Baseline-Hazard-Funktion H_0(t) nach Breslow:
+        Schätzt die kumulative Baseline-Hazard-Funktion H_0(t) nach Breslow
+        unter Berücksichtigung des Counting-Process Risikosets (t_start < d <= duration):
         dh_0(t_i) = d_i / sum_{j in R(t_i)} exp(g(x_j))
         H_0(t) = sum_{t_i <= t} dh_0(t_i)
         """
@@ -312,24 +334,31 @@ class PyTorchCoxPH(nn.Module):
                 x_t = x_train.to(device)
             chunks = torch.split(x_t, 8192)
             log_risks = [self.forward(c).cpu().numpy() for c in chunks]
-            risk = np.exp(np.concatenate(log_risks))
+            risk = np.exp(np.clip(np.concatenate(log_risks), -20.0, 20.0))
 
         dur_np = durations_train if isinstance(durations_train, np.ndarray) else durations_train.cpu().numpy()
         ev_np = events_train if isinstance(events_train, np.ndarray) else events_train.cpu().numpy()
+        if t_start_train is not None:
+            t_start_np = t_start_train if isinstance(t_start_train, np.ndarray) else t_start_train.cpu().numpy()
+        else:
+            t_start_np = np.maximum(0.0, dur_np - 1.0)
 
         unique_durations = np.sort(np.unique(dur_np[ev_np == 1]))
         cum_haz = 0.0
+        base_hazards = []
         cum_hazards = []
 
         for d in unique_durations:
-            at_risk = (dur_np >= d)
+            at_risk = (t_start_np < d) & (dur_np >= d)
             denom = np.sum(risk[at_risk])
             n_events = np.sum(ev_np[dur_np == d])
             dh0 = n_events / denom if denom > 0 else 0.0
             cum_haz += dh0
+            base_hazards.append(dh0)
             cum_hazards.append(cum_haz)
 
         self.baseline_durations = unique_durations
+        self.baseline_hazards = np.array(base_hazards)
         self.cum_baseline_hazards = np.array(cum_hazards)
 
     def predict_surv(
@@ -350,7 +379,7 @@ class PyTorchCoxPH(nn.Module):
                 x_t = x.to(device)
             chunks = torch.split(x_t, 8192)
             log_risks = [self.forward(c).cpu().numpy() for c in chunks]
-            risk = np.exp(np.concatenate(log_risks))
+            risk = np.exp(np.clip(np.concatenate(log_risks), -20.0, 20.0))
 
         if self.cum_baseline_hazards is None:
             raise RuntimeError("Baseline-Hazard wurde noch nicht geschätzt. Rufe zuerst compute_baseline_hazard() auf.")
@@ -364,6 +393,37 @@ class PyTorchCoxPH(nn.Module):
 
         surv = np.exp(-h0 * risk)
         return surv
+
+    def predict_step_hazard(
+        self,
+        x: Union[np.ndarray, torch.Tensor],
+        durations: Union[np.ndarray, torch.Tensor],
+    ) -> np.ndarray:
+        """
+        Berechnet den bedingten Intervall-Hazard h_t(x) = 1 - exp(-dh_0(t) * exp(g(x)))
+        für das spezifische Semester-Intervall `durations` (1-basiert oder 0-basiert).
+        """
+        self.eval()
+        device = next(self.parameters()).device
+        with torch.no_grad():
+            if isinstance(x, np.ndarray):
+                x_t = torch.tensor(x, dtype=torch.float32, device=device)
+            else:
+                x_t = x.to(device)
+            chunks = torch.split(x_t, 8192)
+            log_risks = [self.forward(c).cpu().numpy() for c in chunks]
+            risk = np.exp(np.clip(np.concatenate(log_risks), -20.0, 20.0))
+
+        if self.baseline_hazards is None:
+            return risk
+
+        dur_np = durations if isinstance(durations, np.ndarray) else durations.cpu().numpy()
+        # Falls 0-basierter step_test übergeben wurde (min == 0), auf 1-basiertes Fachsemester heben
+        if len(dur_np) > 0 and np.min(dur_np) == 0:
+            dur_np = dur_np + 1
+        idx = np.searchsorted(self.baseline_durations, dur_np, side='right') - 1
+        dh0 = np.where(idx >= 0, self.baseline_hazards[np.clip(idx, 0, len(self.baseline_hazards) - 1)], 0.0)
+        return 1.0 - np.exp(-dh0 * risk)
 
     def predict_risk(
         self,
@@ -390,28 +450,29 @@ class PyTorchCoxPH(nn.Module):
 
     def compute_loss(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
-        Breslow Negative Partial Likelihood für Time-to-Event Daten.
+        Exakte Breslow Negative Partial Likelihood für Counting-Process Panel- und Survival-Daten.
+        Vermeidet die Reihenfolge-Abhängigkeit von torch.cumsum bei Ties und nutzt
+        R(t_i) = {j : t_start_j < t_stop_i <= t_stop_j}.
         """
         x = batch["x"]
         durations = batch["duration"]
         events = batch["event"]
+        t_starts = batch.get("t_start", torch.zeros_like(durations))
 
-        log_risk = self.forward(x)  # (N,)
+        log_risk = self.forward(x)  # (B,)
 
-        # Sortiere nach absteigender Beobachtungszeit (größte Zeit zuerst)
-        sort_idx = torch.argsort(durations, descending=True)
-        log_risk_sorted = log_risk[sort_idx]
-        events_sorted = events[sort_idx]
+        t_stop_i = durations.unsqueeze(1)   # (B, 1)
+        t_start_j = t_starts.unsqueeze(0)   # (1, B)
+        t_stop_j = durations.unsqueeze(0)   # (1, B)
 
-        exp_risk = torch.exp(log_risk_sorted)
-        cum_exp_risk = torch.cumsum(exp_risk, dim=0)
+        in_risk_set = (t_start_j < t_stop_i) & (t_stop_j >= t_stop_i)  # (B, B)
 
-        # Log(Sum_j exp(r_j))
-        log_cum_risk = torch.log(cum_exp_risk + 1e-7)
+        risk_matrix = log_risk.unsqueeze(0).expand_as(in_risk_set)
+        masked_risks = torch.where(in_risk_set, risk_matrix, torch.full_like(risk_matrix, -1e9))
+        log_cum_risk = torch.logsumexp(masked_risks, dim=1)  # (B,)
 
-        # Breslow-Verlust: - Sum_{i: e_i=1} (r_i - log(sum_risk))
-        loss = -torch.sum((log_risk_sorted - log_cum_risk) * events_sorted)
-        num_events = torch.sum(events_sorted) + 1e-7
+        loss = -torch.sum((log_risk - log_cum_risk) * events)
+        num_events = torch.sum(events) + 1e-7
 
         return loss / num_events
 
@@ -424,7 +485,7 @@ class PyTorchCoxTime(nn.Module):
     gemeinsame Eingabe [x, t] in einem Pre-LayerNorm MLP-Backbone, um zeitabhängige
     Interaktionen g(x, t) zu erfassen.
     
-    Optimiert die exakte diskrete Breslow-Partial-Likelihood über alle Risikosets
+    Optimiert die exakte diskrete Breslow-Partial-Likelihood über alle Counting-Process Risikosets
     und schätzt die zeitvariierende Baseline-Hazard-Funktion:
     dh_0(t) = d(t) / sum_{j in R(t)} exp(g(x_j, t)).
     """
@@ -463,11 +524,12 @@ class PyTorchCoxTime(nn.Module):
 
     def compute_loss(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
-        Breslow Negative Partial Likelihood für CoxTime.
+        Breslow Negative Partial Likelihood für CoxTime mit Counting-Process Risikoset.
         """
         x = batch["x"]
         durations = batch["duration"]
         events = batch["event"]
+        t_starts = batch.get("t_start", torch.zeros_like(durations))
 
         event_mask = (events == 1.0)
         if event_mask.sum() == 0:
@@ -485,7 +547,7 @@ class PyTorchCoxTime(nn.Module):
             if n_cases == 0:
                 continue
 
-            risk_mask = (durations >= d)
+            risk_mask = (t_starts < d) & (durations >= d)
             x_risk = x[risk_mask]
             t_risk = torch.full((x_risk.size(0), 1), float(d), device=x.device)
             g_risk = self.forward(x_risk, t_risk)
@@ -507,9 +569,11 @@ class PyTorchCoxTime(nn.Module):
         x_train: Union[np.ndarray, torch.Tensor],
         durations_train: Union[np.ndarray, torch.Tensor],
         events_train: Union[np.ndarray, torch.Tensor],
+        t_start_train: Optional[Union[np.ndarray, torch.Tensor]] = None,
     ):
         """
-        Schätzt zeitvariierende Baseline-Hazard-Inkremente dh_0(t) nach Breslow:
+        Schätzt zeitvariierende Baseline-Hazard-Inkremente dh_0(t) nach Breslow
+        unter Berücksichtigung des Counting-Process Risikosets (t_start < d <= duration):
         dh_0(t) = d(t) / sum_{j in R(t)} exp(g(x_j, t)).
         """
         self.eval()
@@ -517,6 +581,10 @@ class PyTorchCoxTime(nn.Module):
         x_t = torch.tensor(x_train, dtype=torch.float32, device=device) if isinstance(x_train, np.ndarray) else x_train.to(device)
         dur_np = durations_train if isinstance(durations_train, np.ndarray) else durations_train.cpu().numpy()
         ev_np = events_train if isinstance(events_train, np.ndarray) else events_train.cpu().numpy()
+        if t_start_train is not None:
+            t_start_np = t_start_train if isinstance(t_start_train, np.ndarray) else t_start_train.cpu().numpy()
+        else:
+            t_start_np = np.maximum(0.0, dur_np - 1.0)
 
         unique_durations = np.sort(np.unique(dur_np[ev_np == 1]))
         base_hazards = []
@@ -525,7 +593,7 @@ class PyTorchCoxTime(nn.Module):
 
         with torch.no_grad():
             for d in unique_durations:
-                at_risk = (dur_np >= d)
+                at_risk = (t_start_np < d) & (dur_np >= d)
                 n_events = np.sum(ev_np[dur_np == d])
                 if n_events == 0:
                     base_hazards.append(0.0)
@@ -581,6 +649,31 @@ class PyTorchCoxTime(nn.Module):
 
         surv = np.exp(-cum_h)
         return surv
+
+    def predict_step_hazard(
+        self,
+        x: Union[np.ndarray, torch.Tensor],
+        durations: Union[np.ndarray, torch.Tensor],
+    ) -> np.ndarray:
+        """
+        Berechnet den bedingten Intervall-Hazard h_t(x) = 1 - exp(-dh_0(t) * exp(g(x, t)))
+        für das jeweilige Semester-Intervall `durations`.
+        """
+        self.eval()
+        device = next(self.parameters()).device
+        x_t = torch.tensor(x, dtype=torch.float32, device=device) if isinstance(x, np.ndarray) else x.to(device)
+        dur_np = durations if isinstance(durations, np.ndarray) else durations.cpu().numpy()
+        if len(dur_np) > 0 and np.min(dur_np) == 0:
+            dur_np = dur_np + 1
+        t_t = torch.tensor(dur_np, dtype=torch.float32, device=device)
+        with torch.no_grad():
+            g_val = self.forward(x_t, t_t).cpu().numpy()
+            risk = np.exp(np.clip(g_val, -20.0, 20.0))
+        if self.baseline_hazards is None:
+            return risk
+        idx = np.searchsorted(self.baseline_durations, dur_np, side='right') - 1
+        dh0 = np.where(idx >= 0, self.baseline_hazards[np.clip(idx, 0, len(self.baseline_hazards) - 1)], 0.0)
+        return 1.0 - np.exp(-dh0 * risk)
 
     def predict_risk(
         self,
@@ -685,6 +778,23 @@ class PyTorchDeepHitCompetingRisks(nn.Module):
             ts = torch.clamp(timestep, 0, self.num_durations - 1)
             return cif_k.gather(1, ts.unsqueeze(1)).squeeze(1)
         return cif_k[:, -1]
+
+    def predict_step_hazard(
+        self,
+        x: torch.Tensor,
+        timestep: torch.Tensor,
+        risk_idx: int = 0,
+    ) -> torch.Tensor:
+        """
+        Gibt den ursachenspezifischen bedingten Intervall-Hazard h_{k,t}(x) = f_{k,t}(x) / S_{t-1}(x) zurück.
+        """
+        pmf = self.forward(x)
+        surv = self.predict_surv(x)
+        ts = torch.clamp(timestep, 0, self.num_durations - 1)
+        f_kt = pmf[:, risk_idx, :].gather(1, ts.unsqueeze(1)).squeeze(1)
+        f_all_t = pmf.sum(dim=1).gather(1, ts.unsqueeze(1)).squeeze(1)
+        s_t = surv.gather(1, ts.unsqueeze(1)).squeeze(1)
+        return f_kt / torch.clamp(s_t + f_all_t, min=1e-7)
 
     def compute_loss(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         """

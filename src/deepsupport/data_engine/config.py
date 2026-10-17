@@ -1,40 +1,156 @@
 """
-Konfiguration und Stammdaten für das Deep Learning Absolventenprojekt.
-Generiert aus dem Originalskript mit Erweiterungen (Turnus, Zeitkonto).
+Konfiguration und Stammdaten für das DeepSupport Framework (Version 5 / DGP V5).
+=================================================================================
+Beinhaltet die Bereinigung der historischen V1–V3 Zombie-Parameter, die explizite
+Aufnahme aller Szenario-Schalter (S01–S16), die Parametrisierung vormals hartcodierter
+Magic Numbers sowie die empirische Rekalibrierung der Startverteilungen gemäß:
+  - Academic Motivation Scale (AMS) / SELLMO: kappa_motivation = 9.0 (sigma ~ 0.15)
+  - 22. DSW-Sozialerhebung / DZHW: Zero-Inflated Erwerbstätigkeit (37% bei 0h, 63% aktiv)
+    sowie 28% Migrationshintergrund und 48% Erstakademikerquote
+  - Destatis Fachserie 11: Fachbereichsspezifische Geschlechterverteilungen in STUDIENGAENGE
 """
 
-CONFIG = {   'anomalie_quote': 0.05,
+from copy import deepcopy
+
+CONFIG = {
+    # --- 1. Populations- & Simulationssteuerung ---
+    'dgp_version': '5.0',
+    'n_studierende': 50000,
+    'start_jahr': 2015,
+    'end_jahr': 2024,
+    'max_simulations_semester': 16,
+    'seed': 42,
+    'log_every_n_studis': 1000,
+
+    # --- 2. I/O- & Export-Metadaten ---
+    'output_dir': 'output_dl',
     'csv_decimal': '.',
     'csv_encoding': 'utf-8',
     'csv_sep': ',',
-    'end_jahr': 2024,
-    'gewicht_erwerb': 0.006,
-    'gewicht_hzb': 0.4,
-    'gewicht_integration': 0.2,
-    'gewicht_integration_erstakademiker': 0.05,
-    'gewicht_integration_erwerb': 0.003,
-    'gewicht_integration_migration': 0.05,
-    'gewicht_integration_rauschen': 0.25,
-    'gewicht_lerneffekt': 0.2,
-    'gewicht_motivation': 0.5,
-    'gewicht_motivation_erwerb': 0.004,
-    'gewicht_motivation_hzb': 0.08,
-    'gewicht_motivation_rauschen': 0.25,
-    'gewicht_rauschen': 0.18,
-    'gewicht_schwierigkeit': 0.3,
-    'gewicht_support_boost': 0.08,
-    'integration_startwert': 0.65,
-    'leistung_startwert': 0.55,
-    'log_every_n_studis': 1000,
-    'max_simulations_semester': 16,
-    'motivation_startwert': 0.65,
-    'n_studierende': 50000,
-    'output_dir': 'output_dl',
-    'seed': 42,
-    'start_jahr': 2015,
-    'support_deckel': 1.0,
+
+    # --- 3. Szenario- & Interventions-Steuerung (vormals teils implizite .get()-Defaults) ---
     'support_effect_multiplier': 5.0,
-    'zeitkonto_budget_h': 900}
+    'gewicht_support_boost': 0.08,
+    'support_deckel': 1.0,
+    'support_kosten_faktor': 1.0,
+    'gewicht_rauschen': 0.18,
+    'overload_penalty_factor': 0.10,
+    'overload_penalty_cap': None,
+    'rct_support_uptake': False,
+    'disable_apathy_dampening': False,
+
+    # --- 4. Subsystem Merkmalsgenerierung (V5 Empirische Kalibrierung) ---
+    'studiengang_gewichte': [0.25, 0.28, 0.18, 0.17, 0.12],
+    'alter_min': 17,
+    'alter_max': 45,
+    'alter_norm_mean': 0.125,
+    'kappa_alter': 12.8,
+    'alter_beruflich_min': 24,
+    'alter_beruflich_max': 28,
+    'hzb_min': 1.0,
+    'hzb_max': 4.0,
+    'hzb_norm_mean': 0.466,
+    'kappa_hzb': 6.5,
+    'hzb_offset_allgemein': -0.2,
+    'hzb_offset_fachgebunden_beruflich': 0.2,
+    'migrations_quote': 0.28,          # V5: 28% gem. 22. DSW-Sozialerhebung (V4.1: 0.22)
+    'erstakademiker_quote': 0.48,      # 48% gem. DSW/DZHW
+    # Zero-Inflated Erwerbstätigkeit (22. DSW-Sozialerhebung: 37% 0h, 63% erwerbstätig)
+    'erwerb_modell': 'zero_inflated_beta',
+    'erwerb_erwerbstaetig_quote': 0.63,
+    'erwerb_min_h': 1,
+    'erwerb_max_h': 35,
+    'erwerb_aktiv_norm_mean': 0.41,    # Erwartungswert bei Erwerbstätigen ~ 15.0 h/Woche
+    'kappa_erwerb': 7.5,               # ~16% der Gesamtkohorte arbeiten >= 20 h/Woche
+    # Latente Persönlichkeitsmerkmale (AMS / SELLMO Rekalibrierung)
+    'motivation_startwert': 0.65,
+    'gewicht_motivation_hzb': 0.08,
+    'gewicht_motivation_erwerb': 0.004,
+    'kappa_motivation': 9.0,           # V5: sigma ~ 0.1508 (behebt V4.1 Varianzkollaps kappa=20.0)
+    'motivation_boost_beruflich': 0.10,
+    'integration_startwert': 0.65,
+    'gewicht_integration_erstakademiker': 0.05,
+    'gewicht_integration_migration': 0.05,
+    'gewicht_integration_erwerb': 0.003,
+    'kappa_integration': 9.0,          # V5: konsistente Streuung sigma ~ 0.15
+    # Individueller Zeitpuffer
+    'zeit_puffer_max_h': 180.0,
+    'zeit_puffer_norm_mean': 0.33,
+    'kappa_zeit_puffer': 8.0,
+
+    # --- 5. Subsystem Zeitkonto, Anomalien & Modulabwurf ---
+    'anomalie_quote': 0.05,
+    'anomalie_typen': ['super_schnell', 'sehr_lang', 'fruehabbruch', 'plateau'],
+    'anomalie_gewichte': [0.20, 0.40, 0.25, 0.15],
+    'zeitkonto_budget_h': 900,
+    'semester_wochen_faktor': 20,
+    'zeitkonto_min_h': 100,
+    'modulabwurf_sigmoid_konstante_h': 50.0,
+    'ba_zulassung_rest_cp': 18,
+
+    # --- 6. Subsystem Support-Teilnahme & Wirkung ---
+    'rct_rates': {'fachlich': 0.042, 'ueberfachlich': 0.025, 'psychosozial': 0.023},
+    'support_p_base_fachlich': 0.05,
+    'support_p_slope_fachlich': 0.05,
+    'support_p_repeat_bonus_fachlich': 0.20,
+    'support_p_base_ueberfachlich': 0.05,
+    'support_p_slope_ueberfachlich': 0.15,
+    'support_p_base_psychosozial': 0.01,
+    'support_p_slope_psychosozial': 0.12,
+    'apathy_threshold': 0.20,
+    'support_p_erstakademiker_bonus': 0.05,
+    'support_p_max': 0.90,
+    'support_zeit_ausnahme_p': 0.20,
+    'support_boost_ueberfachlich_mot': 0.02,
+    'support_boost_ueberfachlich_soz': 0.01,
+    'support_boost_psychosozial_mot': 0.015,
+    'support_boost_psychosozial_soz': 0.035,
+    'support_carryover_faktor': 2.0 / 3.0,
+
+    # --- 7. Subsystem Prüfungsleistung & Dynamisches Feedback ---
+    'leistung_startwert': 0.55,
+    'gewicht_hzb': 0.4,
+    'gewicht_motivation': 0.5,
+    'gewicht_integration': 0.2,
+    'gewicht_schwierigkeit': 0.3,
+    'gewicht_lerneffekt': 0.2,
+    'super_klausur_diff_schwelle': 0.5,
+    'super_klausur_boost_base': 0.005,
+    'super_klausur_boost_slope': 0.01,
+    'erwartete_note_glaettung_alt': 0.7,
+    'erwartete_note_glaettung_neu': 0.3,
+    'motivation_penalty_fehlversuch': 0.05,
+    'motivation_bonus_alle_bestanden': 0.02,
+    'soziale_integration_drift_std': 0.05,
+
+    # --- 8. Subsystem Dropout-Mechanik (berechne_dropout) ---
+    'dropout_base': 0.01,
+    'dropout_schwelle_motivation': 0.40,
+    'dropout_gewicht_motivation': 0.30,
+    'dropout_schwelle_integration': 0.40,
+    'dropout_gewicht_integration': 0.20,
+    'dropout_cp_skala': 30.0,
+    'dropout_gewicht_cp_rueckstand': 0.15,
+    'dropout_gewicht_fehlversuch': 0.04,
+    'dropout_overload_cap': 0.30,
+    'dropout_gewicht_overload': 0.10,
+    'dropout_faktor_sem1': 1.4,
+    'dropout_faktor_ab_sem5': 0.6,
+    'dropout_global_skalierer': 0.5,
+    'dropout_max_p': 0.45,
+}
+
+
+def get_v41_legacy_config() -> dict:
+    """Liefert eine V4.1-kompatible Konfiguration für direkte Replikationsvergleiche (V4.1 vs. V5)."""
+    cfg = deepcopy(CONFIG)
+    cfg['dgp_version'] = '4.1'
+    cfg['kappa_motivation'] = 20.0
+    cfg['kappa_integration'] = 20.0
+    cfg['migrations_quote'] = 0.22
+    cfg['erwerb_modell'] = 'discrete_v41'
+    return cfg
+
 
 MODULE_CURRICULA = {   'SG01': [   {   'cp': 9,
                     'fachsem': 1,
@@ -660,31 +776,48 @@ MODULE_CURRICULA = {   'SG01': [   {   'cp': 9,
                     'turnus': 'beides',
                     'workload_h': 90}]}
 
-STUDIENGAENGE = [   {   'abschluss': 'Bachelor',
+STUDIENGAENGE = [
+    {
+        'abschluss': 'Bachelor',
         'cp_gesamt': 120,
         'name': 'Informatik',
         'regelstudienzeit': 6,
-        'studiengang_id': 'SG01'},
-    {   'abschluss': 'Bachelor',
+        'studiengang_id': 'SG01',
+        'geschlecht_gewichte': [0.74, 0.24, 0.02],  # MINT (Destatis: ~24% Frauen)
+    },
+    {
+        'abschluss': 'Bachelor',
         'cp_gesamt': 120,
         'name': 'BWL',
         'regelstudienzeit': 6,
-        'studiengang_id': 'SG02'},
-    {   'abschluss': 'Bachelor',
+        'studiengang_id': 'SG02',
+        'geschlecht_gewichte': [0.50, 0.48, 0.02],  # WiWi (Destatis: ~48% Frauen)
+    },
+    {
+        'abschluss': 'Bachelor',
         'cp_gesamt': 153,
         'name': 'Maschinenbau',
         'regelstudienzeit': 8,
-        'studiengang_id': 'SG03'},
-    {   'abschluss': 'Bachelor',
+        'studiengang_id': 'SG03',
+        'geschlecht_gewichte': [0.75, 0.23, 0.02],  # MINT/Ingenieurw. (Destatis: ~23% Frauen)
+    },
+    {
+        'abschluss': 'Bachelor',
         'cp_gesamt': 132,
         'name': 'Psychologie',
         'regelstudienzeit': 7,
-        'studiengang_id': 'SG04'},
-    {   'abschluss': 'Bachelor',
+        'studiengang_id': 'SG04',
+        'geschlecht_gewichte': [0.20, 0.78, 0.02],  # Psychologie (Destatis: ~78% Frauen)
+    },
+    {
+        'abschluss': 'Bachelor',
         'cp_gesamt': 132,
         'name': 'Soziale Arbeit',
         'regelstudienzeit': 7,
-        'studiengang_id': 'SG05'}]
+        'studiengang_id': 'SG05',
+        'geschlecht_gewichte': [0.22, 0.76, 0.02],  # Soziale Arbeit (Destatis: ~76% Frauen)
+    },
+]
 
 SUPPORT_ANGEBOTE = [   {   'angebot_id': 'SUP01',
         'fachbezogen': True,

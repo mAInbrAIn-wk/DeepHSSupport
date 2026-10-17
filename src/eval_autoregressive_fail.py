@@ -18,35 +18,34 @@ def main(data_dir=None, output_dir=None):
     else:
         data_dir = Path(data_dir)
         
-    if output_dir is None:
-        output_dir = data_dir
-    else:
+    if output_dir is not None:
         output_dir = Path(output_dir)
+    elif os.environ.get('OUTPUT_DIR'):
+        output_dir = Path(os.environ['OUTPUT_DIR'])
+    else:
+        output_dir = data_dir
         
     print(f"Loading data from {data_dir}...")
-    X_hist, X_ctx, y_grades, y_pass, student_ids = prepare_next_exam_dataset(data_dir)
+    import deepsupport.data_engine.feature_builder as fb
+    X_hist, X_ctx, y_grades, y_pass, student_ids = fb.prepare_next_exam_dataset(data_dir)
     
-    # Group-consistent Split on student IDs
-    unique_students = np.unique(student_ids)
-    train_students, temp_students = train_test_split(unique_students, test_size=0.30, random_state=42)
-    val_students, test_students = train_test_split(temp_students, test_size=0.50, random_state=42)
+    # Group-consistent Split on student IDs via feature_builder
+    tr_students, va_students, te_students = fb.split_student_ids(student_ids, seed=42)
     
-    train_idx = np.where(np.isin(student_ids, train_students))[0]
-    test_idx = np.where(np.isin(student_ids, test_students))[0]
+    train_idx = np.where(np.isin(student_ids, tr_students))[0]
+    val_idx = np.where(np.isin(student_ids, va_students))[0]
+    test_idx = np.where(np.isin(student_ids, te_students))[0]
     
-    # Skalierung (like in training)
-    scaler_seq = StandardScaler()
+    scaled_hist, _ = fb.scale_3d_sequences(
+        {"train": X_hist[train_idx], "val": X_hist[val_idx], "test": X_hist[test_idx]},
+        fit_key="train",
+        padding_value=PADDING_VALUE,
+    )
+    X_test_hist = scaled_hist["test"]
+    
     scaler_ctx = StandardScaler()
-    v_mask_tr = X_hist[train_idx, :, 0] != -99.0
-    scaler_seq.fit(X_hist[train_idx][v_mask_tr])
     scaler_ctx.fit(X_ctx[train_idx])
-    
-    X_test_hist = X_hist.copy()[test_idx]
-    X_test_ctx = X_ctx.copy()[test_idx]
-    
-    vm_te = X_test_hist[:, :, 0] != -99.0
-    X_test_hist[vm_te] = scaler_seq.transform(X_test_hist[vm_te])
-    X_test_ctx = scaler_ctx.transform(X_test_ctx)
+    X_test_ctx = scaler_ctx.transform(X_ctx[test_idx]).astype(np.float32)
     
     y_pass_test = y_pass[test_idx]
     y_fail_test = 1 - y_pass_test

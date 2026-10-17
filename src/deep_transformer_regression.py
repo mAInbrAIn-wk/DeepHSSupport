@@ -88,16 +88,24 @@ class SinCosPositionalEncoding(Layer):
 
 @tf.keras.utils.register_keras_serializable()
 class AttentionPooling(Layer):
-    """Gelerntes Attention-Weighted Pooling ueber die Zeitschritte T."""
+    """Gelerntes Attention-Weighted Pooling ueber die Zeitschritte T mit echter Keras-Maskenunterstuetzung."""
     def __init__(self, d_model: int = 64, **kwargs):
         super().__init__(**kwargs)
         self.d_model = d_model
+        self.supports_masking = True
         self.score_dense = Dense(1, activation='tanh')
 
-    def call(self, inputs):
+    def compute_mask(self, inputs, mask=None):
+        return None
+
+    def call(self, inputs, mask=None):
         scores = self.score_dense(inputs)
-        is_padded = tf.reduce_all(tf.equal(inputs, PADDING_VALUE), axis=-1, keepdims=True)
-        padding_mask = tf.cast(is_padded, tf.float32) * -1e9
+        if mask is not None:
+            valid_mask = tf.cast(mask, tf.float32)[:, :, tf.newaxis]
+            padding_mask = (1.0 - valid_mask) * -1e9
+        else:
+            is_padded = tf.reduce_all(tf.equal(inputs, PADDING_VALUE), axis=-1, keepdims=True)
+            padding_mask = tf.cast(is_padded, tf.float32) * -1e9
         scores = scores + padding_mask
         weights = tf.nn.softmax(scores, axis=1)
         pooled = tf.reduce_sum(inputs * weights, axis=1)
@@ -296,18 +304,19 @@ def train_deep_transformer_models(
     valid_mask_s = ~np.isnan(y_s)
     X_sem_clean = X_sem[valid_mask_s]
     y_sem_clean = y_s[valid_mask_s]
+    studis_s_clean = studis_s[valid_mask_s]
 
-    idx_s = np.arange(len(X_sem_clean))
-    tr_s, te_s = train_test_split(idx_s, test_size=0.20, random_state=42)
-    tr_s, va_s = train_test_split(tr_s, test_size=0.20, random_state=42)
+    tr_ids_s, va_ids_s, te_ids_s = fb.split_student_ids(studis_s_clean, seed=42)
+    tr_s = np.where(np.isin(studis_s_clean, tr_ids_s))[0]
+    va_s = np.where(np.isin(studis_s_clean, va_ids_s))[0]
+    te_s = np.where(np.isin(studis_s_clean, te_ids_s))[0]
 
-    scaler_s = StandardScaler()
-    v_mask_tr = X_sem_clean[tr_s, :, 0] != PADDING_VALUE
-    scaler_s.fit(X_sem_clean[tr_s][v_mask_tr])
-
-    for subset in [tr_s, va_s, te_s]:
-        vm = X_sem_clean[subset, :, 0] != PADDING_VALUE
-        X_sem_clean[subset][vm] = scaler_s.transform(X_sem_clean[subset][vm])
+    scaled_s, _ = fb.scale_3d_sequences(
+        {"train": X_sem_clean[tr_s], "val": X_sem_clean[va_s], "test": X_sem_clean[te_s]},
+        fit_key="train",
+        padding_value=PADDING_VALUE,
+    )
+    X_sem_tr, X_sem_va, X_sem_te = scaled_s["train"], scaled_s["val"], scaled_s["test"]
 
     inp_s, head_s = build_modern_transformer_backbone(
         X_sem_clean.shape[1:], d_model=d_model, num_heads=num_heads,
@@ -322,11 +331,11 @@ def train_deep_transformer_models(
     ]
 
     hist_s = m_sem_reg.fit(
-        X_sem_clean[tr_s], y_sem_clean[tr_s],
-        validation_data=(X_sem_clean[va_s], y_sem_clean[va_s]),
+        X_sem_tr, y_sem_clean[tr_s],
+        validation_data=(X_sem_va, y_sem_clean[va_s]),
         epochs=epochs, batch_size=batch_size, callbacks=callbacks_sem, verbose=0
     )
-    preds_s = m_sem_reg.predict(X_sem_clean[te_s], verbose=0).flatten()
+    preds_s = m_sem_reg.predict(X_sem_te, verbose=0).flatten()
     fit_time_sem = time.time() - t0_sem
 
     ev_sem = RegressionEvaluator(base_dir=target_out, model_name='deep_semester_transformer_regressor', mode=mode, temporal=temporal)
@@ -347,18 +356,19 @@ def train_deep_transformer_models(
     valid_mask_e = ~np.isnan(y_e)
     X_ex_clean = X_ex[valid_mask_e]
     y_ex_clean = y_e[valid_mask_e]
+    studis_e_clean = studis_e[valid_mask_e]
 
-    idx_e = np.arange(len(X_ex_clean))
-    tr_e, te_e = train_test_split(idx_e, test_size=0.20, random_state=42)
-    tr_e, va_e = train_test_split(tr_e, test_size=0.20, random_state=42)
+    tr_ids_e, va_ids_e, te_ids_e = fb.split_student_ids(studis_e_clean, seed=42)
+    tr_e = np.where(np.isin(studis_e_clean, tr_ids_e))[0]
+    va_e = np.where(np.isin(studis_e_clean, va_ids_e))[0]
+    te_e = np.where(np.isin(studis_e_clean, te_ids_e))[0]
 
-    scaler_e = StandardScaler()
-    v_mask_e = X_ex_clean[tr_e, :, 0] != PADDING_VALUE
-    scaler_e.fit(X_ex_clean[tr_e][v_mask_e])
-
-    for subset in [tr_e, va_e, te_e]:
-        vm = X_ex_clean[subset, :, 0] != PADDING_VALUE
-        X_ex_clean[subset][vm] = scaler_e.transform(X_ex_clean[subset][vm])
+    scaled_e, _ = fb.scale_3d_sequences(
+        {"train": X_ex_clean[tr_e], "val": X_ex_clean[va_e], "test": X_ex_clean[te_e]},
+        fit_key="train",
+        padding_value=PADDING_VALUE,
+    )
+    X_ex_tr, X_ex_va, X_ex_te = scaled_e["train"], scaled_e["val"], scaled_e["test"]
 
     inp_e, head_e = build_modern_transformer_backbone(
         X_ex_clean.shape[1:], d_model=d_model, num_heads=num_heads,
@@ -374,11 +384,11 @@ def train_deep_transformer_models(
     ]
 
     hist_e = m_ex_reg.fit(
-        X_ex_clean[tr_e], y_ex_clean[tr_e],
-        validation_data=(X_ex_clean[va_e], y_ex_clean[va_e]),
+        X_ex_tr, y_ex_clean[tr_e],
+        validation_data=(X_ex_va, y_ex_clean[va_e]),
         epochs=epochs, batch_size=batch_size, callbacks=callbacks_ex, verbose=0
     )
-    preds_e = m_ex_reg.predict(X_ex_clean[te_e], verbose=0).flatten()
+    preds_e = m_ex_reg.predict(X_ex_te, verbose=0).flatten()
     fit_time_ex = time.time() - t0_ex
 
     ev_ex = RegressionEvaluator(base_dir=target_out, model_name='deep_exam_transformer_regressor', mode=mode, temporal=temporal)
@@ -395,17 +405,18 @@ def train_deep_transformer_models(
     studis_sv, X_sv, y_sv, st_events, _, _ = fb.build_exam_sequence_tensor(
         data_dir, max_exams=40, mode=mode, temporal=temporal
     )
-    idx_sv = np.arange(len(X_sv))
-    tr_sv, te_sv = train_test_split(idx_sv, test_size=0.20, random_state=42, stratify=st_events)
-    tr_sv, va_sv = train_test_split(tr_sv, test_size=0.20, random_state=42, stratify=st_events[tr_sv])
+    tr_ids_sv, va_ids_sv, te_ids_sv = fb.split_student_ids(studis_sv, seed=42, stratify=(st_events == 1).astype(int))
+    tr_sv = np.where(np.isin(studis_sv, tr_ids_sv))[0]
+    va_sv = np.where(np.isin(studis_sv, va_ids_sv))[0]
+    te_sv = np.where(np.isin(studis_sv, te_ids_sv))[0]
 
-    scaler_sv = StandardScaler()
-    v_mask_sv = X_sv[tr_sv, :, 0] != PADDING_VALUE
-    scaler_sv.fit(X_sv[tr_sv][v_mask_sv])
-
-    for subset in [tr_sv, va_sv, te_sv]:
-        vm = X_sv[subset, :, 0] != PADDING_VALUE
-        X_sv[subset][vm] = scaler_sv.transform(X_sv[subset][vm])
+    te_mask_sv = X_sv[te_sv, :, 0] != PADDING_VALUE
+    scaled_sv, _ = fb.scale_3d_sequences(
+        {"train": X_sv[tr_sv], "val": X_sv[va_sv], "test": X_sv[te_sv]},
+        fit_key="train",
+        padding_value=PADDING_VALUE,
+    )
+    X_sv_tr, X_sv_va, X_sv_te = scaled_sv["train"], scaled_sv["val"], scaled_sv["test"]
 
     m_sv = build_modern_causal_transformer_survival(
         X_sv.shape[1:], d_model=d_model, num_heads=num_heads,
@@ -417,14 +428,13 @@ def train_deep_transformer_models(
         tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5, verbose=0)
     ]
     hist_sv = m_sv.fit(
-        X_sv[tr_sv], y_sv[tr_sv],
-        validation_data=(X_sv[va_sv], y_sv[va_sv]),
+        X_sv_tr, y_sv[tr_sv],
+        validation_data=(X_sv_va, y_sv[va_sv]),
         epochs=epochs, batch_size=batch_size, callbacks=callbacks_sv, verbose=0
     )
     fit_time_sv = time.time() - t0_sv
 
-    test_preds_sv = m_sv.predict(X_sv[te_sv], verbose=0)
-    te_mask_sv = X_sv[te_sv, :, 0] != PADDING_VALUE
+    test_preds_sv = m_sv.predict(X_sv_te, verbose=0)
     y_test_flat = y_sv[te_sv][te_mask_sv].flatten()
     preds_flat = test_preds_sv[te_mask_sv].flatten()
 

@@ -145,11 +145,17 @@ class PyTorchAutoregressiveNextExamGRU(nn.Module):
         mask = batch.get("mask")
         y_grade = batch["target_note"]
         y_pass = batch["target_pass"]
+        sw = batch.get("sample_weight")
 
         pred_grade, logit_pass = self.forward(seq, ctx, mask=mask)
 
-        loss_grade = F.mse_loss(pred_grade, y_grade)
-        loss_pass = F.binary_cross_entropy_with_logits(logit_pass, y_pass)
+        if sw is not None:
+            sw = sw / (sw.mean() + 1e-8)
+            loss_grade = torch.mean(sw * (pred_grade - y_grade) ** 2)
+            loss_pass = torch.mean(sw * F.binary_cross_entropy_with_logits(logit_pass, y_pass, reduction="none"))
+        else:
+            loss_grade = F.mse_loss(pred_grade, y_grade)
+            loss_pass = F.binary_cross_entropy_with_logits(logit_pass, y_pass)
         total_loss = loss_grade + weight_pass * loss_pass
 
         return total_loss, {
@@ -282,11 +288,17 @@ class PyTorchAutoregressiveNextExamTransformer(nn.Module):
         mask = batch.get("mask")
         y_grade = batch["target_note"]
         y_pass = batch["target_pass"]
+        sw = batch.get("sample_weight")
 
         pred_grade, logit_pass = self.forward(seq, ctx, mask=mask)
 
-        loss_grade = F.mse_loss(pred_grade, y_grade)
-        loss_pass = F.binary_cross_entropy_with_logits(logit_pass, y_pass)
+        if sw is not None:
+            sw = sw / (sw.mean() + 1e-8)
+            loss_grade = torch.mean(sw * (pred_grade - y_grade) ** 2)
+            loss_pass = torch.mean(sw * F.binary_cross_entropy_with_logits(logit_pass, y_pass, reduction="none"))
+        else:
+            loss_grade = F.mse_loss(pred_grade, y_grade)
+            loss_pass = F.binary_cross_entropy_with_logits(logit_pass, y_pass)
         total_loss = loss_grade + weight_pass * loss_pass
 
         return total_loss, {

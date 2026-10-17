@@ -39,8 +39,11 @@ from tensorflow.keras.layers import Dense, Dropout, LayerNormalization
 from tensorflow.keras.callbacks import EarlyStopping
 
 # Import metrics_logger and feature_builder
-sys.path.insert(0, str(Path(__file__).parent))
-from deepsupport.evaluation.metrics_logger import save_metrics, plot_roc_curve, plot_pr_curve, plot_learning_curve, save_keras_model, plot_confusion_matrix, SurvivalEvaluator
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from deepsupport.evaluation.metrics_logger import (
+    save_metrics, plot_roc_curve, plot_pr_curve, plot_learning_curve,
+    save_keras_model, plot_confusion_matrix, SurvivalEvaluator, MulticlassEvaluator
+)
 import deepsupport.data_engine.feature_builder as fb
 
 
@@ -137,13 +140,14 @@ def run_baseline_training(data_dir: Path = Path('src/output_dl'),
             pr_auc = float(average_precision_score(y_test, y_proba))
             brier = float(brier_score_loss(y_test, y_proba))
         else:
-            roc_auc, pr_auc, brier = 0.0, 0.0, 0.0
+            # Zero-Imputation Policy: Nicht anwendbare binäre Metriken als None statt 0.0 loggen
+            roc_auc, pr_auc, brier = None, None, None
 
         results[name] = {
             "accuracy": acc, "f1_weighted": f1,
             "roc_auc": roc_auc, "pr_auc": pr_auc, "brier": brier
         }
-        print(f"  -> {name}: Acc={acc:.4f}, F1={f1:.4f}, ROC-AUC={roc_auc:.4f}, PR-AUC={pr_auc:.4f}")
+        print(f"  -> {name}: Acc={acc:.4f}, F1={f1:.4f}, ROC-AUC={roc_auc if roc_auc is not None else 'N/A'}, PR-AUC={pr_auc if pr_auc is not None else 'N/A'}")
 
     # 4. Keras MLP
     print("\nTrainiere Keras MLP ...")
@@ -158,7 +162,7 @@ def run_baseline_training(data_dir: Path = Path('src/output_dl'),
     else:
         mlp_probs = mlp_model.predict(X_test, verbose=0)
         mlp_pred = np.argmax(mlp_probs, axis=1)
-        roc_auc_mlp, pr_auc_mlp, brier_mlp = 0.0, 0.0, 0.0
+        roc_auc_mlp, pr_auc_mlp, brier_mlp = None, None, None
 
     acc_mlp = float(accuracy_score(y_test, mlp_pred))
     f1_mlp = float(f1_score(y_test, mlp_pred, average='weighted', zero_division=0))
@@ -167,20 +171,34 @@ def run_baseline_training(data_dir: Path = Path('src/output_dl'),
         "accuracy": acc_mlp, "f1_weighted": f1_mlp,
         "roc_auc": roc_auc_mlp, "pr_auc": pr_auc_mlp, "brier": brier_mlp
     }
-    print(f"  -> Keras MLP: Acc={acc_mlp:.4f}, F1={f1_mlp:.4f}, ROC-AUC={roc_auc_mlp:.4f}, PR-AUC={pr_auc_mlp:.4f}")
+    print(f"  -> Keras MLP: Acc={acc_mlp:.4f}, F1={f1_mlp:.4f}, ROC-AUC={roc_auc_mlp if roc_auc_mlp is not None else 'N/A'}, PR-AUC={pr_auc_mlp if pr_auc_mlp is not None else 'N/A'}")
 
     # Metrics Logging
     base_dir = data_dir
-    model_name = f"mlp_baseline_{mode}" if mode != 'standard' else "mlp_baseline"
-    
-    evaluator = SurvivalEvaluator(base_dir=base_dir, model_name=model_name)
-    evaluator.evaluate_and_log(
-        y_true=y_test,
-        y_prob=mlp_probs,
-        model=mlp_model,
-        history=mlp_history.history if hasattr(mlp_history, 'history') else mlp_history,
-        extra_metrics=results
-    )
+    if binary_target:
+        model_name = f"mlp_baseline_{mode}" if mode != 'standard' else "mlp_baseline"
+        evaluator = SurvivalEvaluator(base_dir=base_dir, model_name=model_name, mode=mode)
+        evaluator.evaluate_and_log(
+            y_true=y_test,
+            y_prob=mlp_probs,
+            model=mlp_model,
+            history=mlp_history.history if hasattr(mlp_history, 'history') else mlp_history,
+            extra_metrics=results,
+            mode=mode,
+        )
+    else:
+        model_name = f"mlp_multiclass_baseline_{mode}" if mode != 'standard' else "mlp_multiclass_baseline"
+        evaluator = MulticlassEvaluator(base_dir=base_dir, model_name=model_name, class_names=class_names, mode=mode)
+        evaluator.evaluate_and_log(
+            y_true=y_test,
+            y_pred=mlp_pred,
+            y_prob_matrix=mlp_probs,
+            class_names=class_names,
+            keras_model=mlp_model,
+            history=mlp_history.history if hasattr(mlp_history, 'history') else mlp_history,
+            extra_metrics=results,
+            mode=mode,
+        )
     save_metrics(model_name, results, base_dir)
 
     print("\n" + "=" * 74)

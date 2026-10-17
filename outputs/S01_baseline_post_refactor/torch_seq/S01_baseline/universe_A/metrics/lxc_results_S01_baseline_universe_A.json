@@ -1,0 +1,86 @@
+{
+    "scenario": "S01_baseline",
+    "universe": "universe_A",
+    "timestamp": "2026-10-16 18:34:36",
+    "models": {
+        "torch_exam_transformer_regressor": {
+            "model_name": "torch_exam_transformer_regressor",
+            "mode": "gradeblind",
+            "temporal_type": "prev",
+            "n_samples": 5314,
+            "r2_score": 0.80649334192276,
+            "adj_r2": null,
+            "rmse": 0.263366140495406,
+            "mae": 0.20696422457695007,
+            "median_ae": 0.16836446523666382,
+            "explained_variance": 0.808430552482605,
+            "max_error": 1.1119509935379028,
+            "training_time_s": 193.31422090530396
+        },
+        "torch_causal_exam_transformer_survival": {
+            "model_name": "torch_causal_exam_transformer_survival",
+            "mode": "gradeblind",
+            "temporal_type": "prev",
+            "n_samples": 128198,
+            "label_class_1": "Dropout",
+            "label_class_0": "Non-Drop",
+            "dropout_prevalence_pi0": 0.01691914163529873,
+            "roc_auc": 0.8779295935901762,
+            "pr_auc_dropout": 0.15960956674740212,
+            "pr_auc_nondropout": 0.9973325570174018,
+            "pr_auc_baseline_pi0": 0.01691914163529873,
+            "pr_auc_class_1": 0.15960956674740212,
+            "pr_auc_class_0": 0.9973325570174018,
+            "pr_auc_baseline_class_1": 0.01691914163529873,
+            "pr_auc_baseline_class_0": 0.9830808583647013,
+            "pr_auc_lift_class_1": 9.433668101365475,
+            "pr_auc_lift_class_0": 1.0144969750264565,
+            "brier_score": 0.015261271968483925,
+            "brier_skill_score": 0.08246388839817209,
+            "f1_score": 0.0018407731247123793,
+            "balanced_accuracy": 0.5004531072731176,
+            "c_index": null,
+            "training_time_s": 289.25656247138977,
+            "student_roc_auc": 0.7010811336578449,
+            "student_pr_auc": 0.5400254600187698,
+            "n_test_exam_steps": 128198,
+            "step_prevalence_pi0": 0.01691914163529873
+        },
+        "torch_semester_gru": {
+            "Step_ROC_AUC": 0.8196398177006053,
+            "Step_PR_AUC": 0.2988258397874928,
+            "Step_Brier_Score": 0.03451525792479515,
+            "Student_ROC_AUC": 0.701840332454038,
+            "Student_PR_AUC": 0.4622565481698725,
+            "temporal": "prev",
+            "mode": "standard"
+        },
+        "torch_semester_transformer": {
+            "Step_ROC_AUC": 0.8146717882140189,
+            "Step_PR_AUC": 0.2929719183229146,
+            "Step_Brier_Score": 0.03468665853142738,
+            "Student_ROC_AUC": 0.6817055266688475,
+            "Student_PR_AUC": 0.4419344887835558,
+            "temporal": "prev",
+            "mode": "standard"
+        },
+        "torch_exam_gru": {
+            "Step_ROC_AUC": 0.897603137729588,
+            "Step_PR_AUC": 0.20383537842365407,
+            "Step_Brier_Score": 0.015044618397951126,
+            "Student_ROC_AUC": 0.7489033181008513,
+            "Student_PR_AUC": 0.6044569251091976,
+            "temporal": "prev",
+            "mode": "standard"
+        },
+        "torch_dynamic_deephit": {
+            "Step_ROC_AUC": 0.9979627829214066,
+            "Step_PR_AUC": 0.9500590551533838,
+            "Step_Brier_Score": 0.003219680394977331,
+            "Student_ROC_AUC": 0.9957635983758725,
+            "Student_PR_AUC": 0.9820045064585252,
+            "temporal": "prev",
+            "mode": "standard"
+        }
+    }
+}

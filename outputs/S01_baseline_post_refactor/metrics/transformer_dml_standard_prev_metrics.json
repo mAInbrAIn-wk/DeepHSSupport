@@ -1,0 +1,63 @@
+{
+    "model_name": "transformer_dml",
+    "mode": "standard",
+    "temporal_type": "prev",
+    "estimand_type": "HR",
+    "se_scale": "natural",
+    "hr_fachlich": 0.9585184613936426,
+    "hr_ueberfachlich": 1.0353956314490442,
+    "hr_psychosozial": 0.9504849927118773,
+    "risk_reduction_pct_hr_fachlich": 4.148153860635739,
+    "risk_reduction_pct_hr_ueberfachlich": -3.539563144904423,
+    "risk_reduction_pct_hr_psychosozial": 4.951500728812275,
+    "ci_lower_95_asym_hr_fachlich": 0.8388961938948668,
+    "ci_upper_95_asym_hr_fachlich": 1.0951982468376507,
+    "ci_lower_95_asym_hr_ueberfachlich": 0.9818335336245076,
+    "ci_upper_95_asym_hr_ueberfachlich": 1.0918797096553003,
+    "ci_lower_95_asym_hr_psychosozial": 0.8965109163550942,
+    "ci_upper_95_asym_hr_psychosozial": 1.007708556459636,
+    "model_type": "transformer_dml",
+    "temporal": "prev",
+    "ROC-AUC_Panel": 0.8183844991907326,
+    "PR-AUC_Panel": 0.2927309033208976,
+    "Brier_Score": 0.03350807726383209,
+    "fach": {
+        "robinson": {
+            "ate": -0.001609007261217354,
+            "ate_se": 0.0025286209706616852,
+            "implied_hr": 0.9585184613936426,
+            "implied_hr_se": 0.0651899409925523
+        },
+        "partial": {
+            "mean_rr": 0.9646438360214233,
+            "median_rr": 0.9646438360214233,
+            "ate": -0.0015533353434875607
+        }
+    },
+    "uebf": {
+        "robinson": {
+            "ate": 0.001372943963273269,
+            "ate_se": 0.0010883982475588482,
+            "implied_hr": 1.0353956314490442,
+            "implied_hr_se": 0.028059807443656486
+        },
+        "partial": {
+            "mean_rr": 1.0173779726028442,
+            "median_rr": 1.0173779726028442,
+            "ate": 0.000752708176150918
+        }
+    },
+    "psych": {
+        "robinson": {
+            "ate": -0.001920613577568929,
+            "ate_se": 0.0010996773776133706,
+            "implied_hr": 0.9504849927118773,
+            "implied_hr_se": 0.028350592749652438
+        },
+        "partial": {
+            "mean_rr": 0.9922913908958435,
+            "median_rr": 0.9922913908958435,
+            "ate": -0.00033588355290703475
+        }
+    }
+}

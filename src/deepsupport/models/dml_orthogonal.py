@@ -22,7 +22,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GroupKFold
 from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
@@ -33,7 +33,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, BatchNormalization
 
 # Import metrics_logger and feature_builder
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from deepsupport.evaluation.metrics_logger import save_metrics, save_keras_model, plot_learning_curve, plot_roc_curve, plot_pr_curve, CausalEvaluator
 import deepsupport.data_engine.feature_builder as fb
 
@@ -69,9 +69,9 @@ def train_dml_orthogonal_survival(data_dir: Path = Path('src/output_dl'),
     train_ids, temp_ids = train_test_split(unique_studis, test_size=0.30, random_state=42)
     val_ids, test_ids = train_test_split(temp_ids, test_size=0.50, random_state=42)
 
-    train_panel = panel_df[panel_df['studierenden_id'].isin(train_ids)].copy()
-    val_panel   = panel_df[panel_df['studierenden_id'].isin(val_ids)].copy()
-    test_panel  = panel_df[panel_df['studierenden_id'].isin(test_ids)].copy()
+    train_panel = panel_df[panel_df['studierenden_id'].isin(train_ids)].copy().reset_index(drop=True)
+    val_panel   = panel_df[panel_df['studierenden_id'].isin(val_ids)].copy().reset_index(drop=True)
+    test_panel  = panel_df[panel_df['studierenden_id'].isin(test_ids)].copy().reset_index(drop=True)
 
     scaler = StandardScaler()
     imputer = SimpleImputer(strategy='median')
@@ -80,33 +80,63 @@ def train_dml_orthogonal_survival(data_dir: Path = Path('src/output_dl'),
     W_val   = scaler.transform(imputer.transform(val_panel[confounder_cols]))
     W_test  = scaler.transform(imputer.transform(test_panel[confounder_cols]))
 
+    y_train = train_panel[target_col].values.astype(float)
+    y_val   = val_panel[target_col].values.astype(float)
+    y_test  = test_panel[target_col].values.astype(float)
+
     # -------------------------------------------------------------------------
-    # STUFE 1: TREATMENT CONDITIONAL EXPECTATION & RESIDUALS
+    # STUFE 1: 5-FOLD GROUPKFOLD CROSS-FITTING (TREATMENTS & OUTCOME)
     # -------------------------------------------------------------------------
-    print("\n[Stufe 1] Schätze Treatment-Modelle E[A_t | W_t] (Ridge Regression) ...")
-    residuals_train, residuals_val, residuals_test, a_hat_test_list = [], [], [], []
+    print("\n[Stufe 1] 5-Fold GroupKFold Cross-Fitting für E[A_t | W_t] und E[Y_t | W_t] ...")
+    n_folds = 5
+    gkf = GroupKFold(n_splits=n_folds)
+    studis_tr = train_panel['studierenden_id'].values
 
-    for supp_col in treatment_cols:
-        y_treat_train = train_panel[supp_col].values.astype(float)
-        y_treat_val   = val_panel[supp_col].values.astype(float)
-        y_treat_test  = test_panel[supp_col].values.astype(float)
+    n_treat = len(treatment_cols)
+    A_tilde_train = np.zeros((len(train_panel), n_treat), dtype=np.float64)
+    A_hat_val     = np.zeros((len(val_panel), n_treat), dtype=np.float64)
+    A_hat_test    = np.zeros((len(test_panel), n_treat), dtype=np.float64)
+    y_tilde_train = np.zeros(len(train_panel), dtype=np.float64)
 
-        reg_model = Ridge(alpha=1.0)
-        reg_model.fit(W_train, y_treat_train)
+    for f_tr_idx, f_va_idx in gkf.split(train_panel, groups=studis_tr):
+        W_f_tr, W_f_va = W_train[f_tr_idx], W_train[f_va_idx]
+        y_f_tr, y_f_va = y_train[f_tr_idx], y_train[f_va_idx]
 
-        a_hat_train = reg_model.predict(W_train)
-        a_hat_val   = reg_model.predict(W_val)
-        a_hat_test  = reg_model.predict(W_test)
+        out_reg = Ridge(alpha=1.0)
+        out_reg.fit(W_f_tr, y_f_tr)
+        y_tilde_train[f_va_idx] = y_f_va - out_reg.predict(W_f_va)
 
-        residuals_train.append(y_treat_train - a_hat_train)
-        residuals_val.append(y_treat_val - a_hat_val)
-        residuals_test.append(y_treat_test - a_hat_test)
-        a_hat_test_list.append(a_hat_test)
+        for k, supp_col in enumerate(treatment_cols):
+            A_f_tr = train_panel.loc[f_tr_idx, supp_col].values.astype(float)
+            A_f_va = train_panel.loc[f_va_idx, supp_col].values.astype(float)
 
-    A_tilde_train = np.column_stack(residuals_train)
-    A_tilde_val   = np.column_stack(residuals_val)
-    A_tilde_test  = np.column_stack(residuals_test)
-    A_hat_test    = np.column_stack(a_hat_test_list)
+            reg_model = Ridge(alpha=1.0)
+            reg_model.fit(W_f_tr, A_f_tr)
+
+            A_tilde_train[f_va_idx, k] = A_f_va - reg_model.predict(W_f_va)
+            A_hat_val[:, k]  += reg_model.predict(W_val) / n_folds
+            A_hat_test[:, k] += reg_model.predict(W_test) / n_folds
+
+    A_val_raw  = val_panel[treatment_cols].values.astype(float)
+    A_test_raw = test_panel[treatment_cols].values.astype(float)
+    A_tilde_val  = A_val_raw - A_hat_val
+    A_tilde_test = A_test_raw - A_hat_test
+
+    # Multivariater Neyman-Orthogonaler Robinson-Schätzer mit Cluster-Sandwich-SE
+    bread_inv = np.linalg.inv(A_tilde_train.T @ A_tilde_train + 1e-8 * np.eye(n_treat))
+    theta_vec = bread_inv @ (A_tilde_train.T @ y_tilde_train)
+    eps_vec = y_tilde_train - A_tilde_train @ theta_vec
+
+    _, cluster_inv_tr = np.unique(studis_tr, return_inverse=True)
+    n_clusters_tr = int(cluster_inv_tr.max()) + 1
+    cluster_scores = np.zeros((n_clusters_tr, n_treat), dtype=np.float64)
+    np.add.at(cluster_scores, cluster_inv_tr, A_tilde_train * eps_vec[:, None])
+    meat = (n_clusters_tr / max(n_clusters_tr - 1, 1)) * (cluster_scores.T @ cluster_scores)
+    se_theta_vec = np.sqrt(np.maximum(np.diag(bread_inv @ meat @ bread_inv), 1e-12))
+
+    A_train_raw = train_panel[treatment_cols].values.astype(float)
+    untreated_mask = np.sum(A_train_raw, axis=1) == 0
+    baseline_y0 = max(float(np.mean(y_train[untreated_mask])) if np.any(untreated_mask) else float(np.mean(y_train)), 1e-4)
 
     # -------------------------------------------------------------------------
     # STUFE 2: NEURONALES DML DISCRETE-TIME HAZARD MODELL
@@ -115,10 +145,6 @@ def train_dml_orthogonal_survival(data_dir: Path = Path('src/output_dl'),
     X_train_dml = np.hstack([W_train, A_tilde_train])
     X_val_dml   = np.hstack([W_val, A_tilde_val])
     X_test_dml  = np.hstack([W_test, A_tilde_test])
-
-    y_train = train_panel[target_col].values
-    y_val   = val_panel[target_col].values
-    y_test  = test_panel[target_col].values
 
     tf.random.set_seed(42)
     dml_model = Sequential([
@@ -145,15 +171,19 @@ def train_dml_orthogonal_survival(data_dir: Path = Path('src/output_dl'),
     # -------------------------------------------------------------------------
     # STUFE 3: KAUSALE INFERENZ & COUNTERFACTUAL SIMULATION
     # -------------------------------------------------------------------------
-    print("\n[Stufe 3] Kausale Counterfactual-Inferenz (Isolierte und Partielle Support-Effekte) ...")
+    print("\n[Stufe 3] Kausale Counterfactual-Inferenz (Robinson & Neuronale Counterfactuals) ...")
     test_h_factual = dml_model.predict(X_test_dml, verbose=0).flatten()
     auc_dml = float(roc_auc_score(y_test, test_h_factual))
     pr_auc_dml = float(average_precision_score(y_test, test_h_factual))
     brier_dml = float(brier_score_loss(y_test, test_h_factual))
 
     causal_results = {}
+    hr_estimates = {}
+    hr_se = {}
+    name_map = {'fach': 'fachlich', 'uebf': 'ueberfachlich', 'psych': 'psychosozial'}
+
     for idx_treat, supp_col in enumerate(treatment_cols):
-        # 1. Partielle Kontrafaktizität: Setze dieses Treatment A_k = 0 vs. Realwert
+        # 1. Partielle Kontrafaktizität: Setze dieses Treatment A_k = 0 vs. 1
         A_tilde_cf0 = A_tilde_test.copy()
         A_tilde_cf0[:, idx_treat] = 0.0 - A_hat_test[:, idx_treat]
         X_test_cf0 = np.hstack([W_test, A_tilde_cf0])
@@ -180,12 +210,22 @@ def train_dml_orthogonal_survival(data_dir: Path = Path('src/output_dl'),
         rr_isolated = float(np.mean(h_iso1) / (np.mean(h_iso0) + 1e-7))
         ate_isolated = float(np.mean(h_iso1 - h_iso0))
 
+        theta_k = float(theta_vec[idx_treat])
+        se_k = float(se_theta_vec[idx_treat])
+        robinson_hr = float(max(0.05, 1.0 + theta_k / baseline_y0))
+        robinson_hr_se = float(se_k / baseline_y0)
+
         short_name = supp_col.replace('_supp_count', '').replace('support_glz_', '')
+        full_name = name_map.get(short_name, short_name)
+        hr_estimates[f"hr_{full_name}"] = robinson_hr
+        hr_se[f"hr_{full_name}"] = robinson_hr_se
+
         causal_results[short_name] = {
+            "robinson": {"ate": theta_k, "ate_se": se_k, "implied_hr": robinson_hr, "implied_hr_se": robinson_hr_se},
             "partial": {"mean_rr": rr_partial, "median_rr": rr_partial, "ate": ate_partial},
             "isolated": {"mean_rr": rr_isolated, "median_rr": rr_isolated, "ate": ate_isolated}
         }
-        print(f"  • {short_name.upper():<14}: Partial RR = {rr_partial:.4f}, Isolated RR = {rr_isolated:.4f}, ATE = {ate_partial:+.4f}")
+        print(f"  • {short_name.upper():<14}: Robinson HR = {robinson_hr:.4f} (ATE={theta_k:+.4f}), Partial RR = {rr_partial:.4f}, Isolated RR = {rr_isolated:.4f}")
 
     print("\n" + "=" * 74)
     print("   ERGEBNISSE DOUBLE MACHINE LEARNING SURVIVAL (TEST-SET)")
@@ -209,14 +249,25 @@ def train_dml_orthogonal_survival(data_dir: Path = Path('src/output_dl'),
         **causal_results
     }
 
-    evaluator = CausalEvaluator(base_dir=base_dir, model_name=model_name,
-                                temporal=temporal, mode=mode)
-    hr_estimates = {
-        "hr_fachlich": causal_results.get("fach", {}).get("partial", {}).get("mean_rr", 1.0),
-        "hr_ueberfachlich": causal_results.get("uebf", {}).get("partial", {}).get("mean_rr", 1.0),
-        "hr_psychosozial": causal_results.get("psych", {}).get("partial", {}).get("mean_rr", 1.0)
-    }
-    evaluator.evaluate_and_log(hr_estimates=hr_estimates, extra_metrics=metrics_dict, keras_model=dml_model, history=history.history, mode=mode, temporal_type=temporal)
+    evaluator = CausalEvaluator(
+        base_dir=base_dir,
+        model_name=model_name,
+        temporal=temporal,
+        mode=mode,
+        estimand_type="HR",
+        se_scale="natural",
+    )
+    evaluator.evaluate_and_log(
+        hr_estimates=hr_estimates,
+        hr_se=hr_se,
+        extra_metrics=metrics_dict,
+        keras_model=dml_model,
+        history=history.history,
+        mode=mode,
+        temporal_type=temporal,
+        estimand_type="HR",
+        se_scale="natural",
+    )
     save_metrics(model_name, metrics_dict, base_dir)
     save_keras_model(dml_model, model_name, base_dir)
 

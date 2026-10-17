@@ -210,7 +210,7 @@ class PyTorchMSM:
         np.random.seed(seed)
 
     def fit_and_evaluate(self) -> Dict[str, Any]:
-        """Führt die vollständige MSM-IPTW Analyse durch."""
+        """Führt die vollständige MSM-IPTW Analyse durch (cloglog HR + logit OR)."""
         start_time = time.time()
         print("\n" + "=" * 78)
         print("   PYTORCH MARGINAL STRUCTURAL MODELS (MSM / IPTW)")
@@ -222,17 +222,26 @@ class PyTorchMSM:
             self.data_dir, mode=self.mode, temporal=self.temporal
         )
 
-        # Relevante Spalten identifizieren
-        baseline_candidates = [
+        # Strikte Filterung gegen feature_cols aus feature_builder (verhindert Leakage in blind/gradeblind
+        # und nutzt automatisch Oracle-Features in mode='oracle' sowie cum-Features in temporal='cum')
+        static_candidates = {
             "hzb_note", "hzb_typ_ord", "migrationshintergrund", "erstakademiker",
-            "erwerbstaetigkeit_std", "stg_BWL", "stg_Maschinenbau", "stg_Psychologie", "stg_Soziale_Arbeit"
-        ]
-        baseline_cols = [c for c in baseline_candidates if c in panel_df.columns]
+            "erwerbstaetigkeit_std", "stg_BWL", "stg_Maschinenbau",
+            "stg_Psychologie", "stg_Soziale_Arbeit", "hidden_zeit_puffer_static",
+        }
+        treatment_set = {
+            "fach_supp_count", "uebf_supp_count", "psych_supp_count",
+            "support_glz_fachlich", "support_glz_ueberfachlich", "support_glz_psychosozial",
+        }
 
-        time_varying_candidates = [
-            "fails_prev", "delta_cp_prev", "cp_rueckstand", "gpa_prev"
+        baseline_cols = [c for c in feature_cols if c in static_candidates and c in panel_df.columns]
+        time_varying_cols = [
+            c for c in feature_cols
+            if c not in static_candidates and c not in treatment_set and c not in ("fachsemester", "is_first_semester") and c in panel_df.columns
         ]
-        time_varying_cols = [c for c in time_varying_candidates if c in panel_df.columns]
+
+        print(f"MSM Baseline-Kovariaten ({len(baseline_cols)}): {baseline_cols}")
+        print(f"MSM Time-Varying-Kovariaten ({len(time_varying_cols)}): {time_varying_cols}")
 
         # Treatments vorbereiten
         treatments_to_run = {}
@@ -262,8 +271,14 @@ class PyTorchMSM:
         unique_studis, studi_inverse = np.unique(studis, return_inverse=True)
         n_clusters = len(unique_studis)
 
+        # Zeitvariierende Baseline-Hazard alpha_0(t) über Semester-Indikatoren (2..16)
+        sem_dummies_df = pd.get_dummies(panel_df["fachsemester"], prefix="sem", drop_first=True, dtype=np.float32)
+        sem_dummies = sem_dummies_df.values.astype(np.float32)
+
         hr_estimates = {}
         hr_se = {}
+        or_estimates = {}
+        or_se = {}
         extra_info = {}
 
         # 2. Schleife über Treatments
@@ -280,74 +295,107 @@ class PyTorchMSM:
             )
             print(f"  • IPTW-Diagnostik: Mean = {diag['mean']:.4f} (Ideal=1.0) | Std = {diag['std']:.4f} | Range = [{diag['min']:.3f}, {diag['max']:.3f}]")
 
-            # Design-Matrix: [Intercept, Treatment A_t, Baseline V]
-            imputer_base = SimpleImputer(strategy="median")
-            V_mat = imputer_base.fit_transform(panel_df[baseline_cols])
+            # Design-Matrix: [Intercept, Treatment A_t, Semester-Dummies alpha_0(t), Baseline V]
             A_vec = (panel_df[treat_col].values > 0).astype(np.float32).reshape(-1, 1)
             ones = np.ones((len(panel_df), 1), dtype=np.float32)
-
-            # Design-Matrix: Intercept, Treatment, Baselines
-            X_msm = np.hstack([ones, A_vec, V_mat])
+            if baseline_cols:
+                imputer_base = SimpleImputer(strategy="median")
+                scaler_base = StandardScaler()
+                V_mat = scaler_base.fit_transform(imputer_base.fit_transform(panel_df[baseline_cols])).astype(np.float32)
+                X_msm = np.hstack([ones, A_vec, sem_dummies, V_mat])
+            else:
+                X_msm = np.hstack([ones, A_vec, sem_dummies])
             p_dim = X_msm.shape[1]
 
-            # Weighted Logistic Regression via PyTorch (L-BFGS / AdamW)
             t_X = torch.tensor(X_msm, dtype=torch.float32).to(self.device)
             t_y = torch.tensor(y, dtype=torch.float32).to(self.device)
             t_sw = torch.tensor(sw, dtype=torch.float32).to(self.device)
 
-            beta = torch.zeros(p_dim, requires_grad=True, device=self.device)
-            opt = torch.optim.Adam([beta], lr=0.02)
+            # -----------------------------------------------------------------
+            # (A) Complementary Log-Log (cloglog) Regression -> Exakte HR = exp(beta)
+            # -----------------------------------------------------------------
+            beta_cll = torch.zeros(p_dim, dtype=torch.float32, device=self.device)
+            beta_cll[0] = -3.0  # Sinnvoller Startwert für seltene Semester-Hazards
+            beta_cll.requires_grad_(True)
+            opt_cll = torch.optim.Adam([beta_cll], lr=0.02)
 
-            for _ in range(80):
-                opt.zero_grad()
-                logits = torch.matmul(t_X, beta)
-                bce = F.binary_cross_entropy_with_logits(logits, t_y, reduction="none")
-                loss = torch.mean(t_sw * bce)
-                loss.backward()
-                opt.step()
+            for _ in range(150):
+                opt_cll.zero_grad()
+                eta = torch.clamp(torch.matmul(t_X, beta_cll), -12.0, 4.0)
+                mu = torch.exp(eta)
+                probs_cll_t = torch.clamp(1.0 - torch.exp(-mu), 1e-6, 1.0 - 1e-6)
+                nll = -(t_y * torch.log(probs_cll_t) + (1.0 - t_y) * (-mu))
+                loss_cll = torch.mean(t_sw * nll)
+                loss_cll.backward()
+                opt_cll.step()
 
-            beta_hat = beta.detach().cpu().numpy()
-            beta_treat = float(beta_hat[1])
-
-            # Vorhergesagte Wahrscheinlichkeiten
             with torch.no_grad():
-                probs = torch.sigmoid(torch.matmul(t_X, beta)).cpu().numpy()
+                eta_np = np.clip(torch.matmul(t_X, beta_cll).cpu().numpy(), -12.0, 4.0)
+                mu_np = np.exp(eta_np)
+                probs_cll = np.clip(1.0 - np.exp(-mu_np), 1e-6, 1.0 - 1e-6)
 
-            # 3. Cluster-Robuster Huber-White Sandwich Standardfehler
-            # W_diag = sw * p * (1 - p)
-            v_diag = sw * probs * (1.0 - probs)
-            XVX = np.dot(X_msm.T, X_msm * v_diag[:, None])
-            try:
-                inv_XVX = np.linalg.inv(XVX)
-            except np.linalg.LinAlgError:
-                inv_XVX = np.linalg.pinv(XVX)
+            beta_treat_cll = float(beta_cll.detach().cpu().numpy()[1])
+            ratio_cll = mu_np / np.maximum(probs_cll, 1e-6)
+            v_diag_cll = sw * (1.0 - probs_cll) * ratio_cll * mu_np
+            XVX_cll = np.dot(X_msm.T, X_msm * v_diag_cll[:, None])
+            inv_XVX_cll = np.linalg.pinv(XVX_cll + 1e-6 * np.eye(p_dim))
+            r_it_cll = (sw * (y - probs_cll) * ratio_cll)[:, None] * X_msm
+            cluster_scores_cll = np.zeros((n_clusters, p_dim), dtype=np.float64)
+            np.add.at(cluster_scores_cll, studi_inverse, r_it_cll)
+            B_cll = np.dot(cluster_scores_cll.T, cluster_scores_cll)
+            V_robust_cll = np.dot(inv_XVX_cll, np.dot(B_cll, inv_XVX_cll))
+            se_treat_cll = float(np.sqrt(max(V_robust_cll[1, 1], 1e-12)))
 
-            # Score-Residuen pro Beobachtung: r_it = sw_it * (y_it - p_it) * x_it
-            r_it = (sw * (y - probs))[:, None] * X_msm
-
-            # Aggregiere Scores auf Cluster-Ebene (Studierende)
-            cluster_scores = np.zeros((n_clusters, p_dim), dtype=np.float32)
-            np.add.at(cluster_scores, studi_inverse, r_it)
-
-            # Fleisch der Sandwich-Matrix: B = sum_i s_i s_i^T
-            B = np.dot(cluster_scores.T, cluster_scores)
-
-            # Sandwich-Kovarianz: V = inv(XVX) * B * inv(XVX)
-            V_robust = np.dot(inv_XVX, np.dot(B, inv_XVX))
-            se_treat = float(np.sqrt(max(V_robust[1, 1], 1e-12)))
-
-            # Causal Hazard Ratio
-            hr_val = float(np.exp(beta_treat))
-            ci_low = float(np.exp(beta_treat - 1.96 * se_treat))
-            ci_high = float(np.exp(beta_treat + 1.96 * se_treat))
+            hr_val = float(np.exp(beta_treat_cll))
+            ci_low = float(np.exp(beta_treat_cll - 1.96 * se_treat_cll))
+            ci_high = float(np.exp(beta_treat_cll + 1.96 * se_treat_cll))
             rr_pct = float((1.0 - hr_val) * 100.0)
 
+            # -----------------------------------------------------------------
+            # (B) Pooled Logistic (logit) Regression -> Odds Ratio OR = exp(beta)
+            # -----------------------------------------------------------------
+            beta_log = torch.zeros(p_dim, dtype=torch.float32, device=self.device)
+            beta_log[0] = -3.0
+            beta_log.requires_grad_(True)
+            opt_log = torch.optim.Adam([beta_log], lr=0.02)
+
+            for _ in range(150):
+                opt_log.zero_grad()
+                logits = torch.matmul(t_X, beta_log)
+                bce = F.binary_cross_entropy_with_logits(logits, t_y, reduction="none")
+                loss_log = torch.mean(t_sw * bce)
+                loss_log.backward()
+                opt_log.step()
+
+            beta_treat_log = float(beta_log.detach().cpu().numpy()[1])
+            with torch.no_grad():
+                probs_log = torch.sigmoid(torch.matmul(t_X, beta_log)).cpu().numpy()
+
+            v_diag_log = sw * probs_log * (1.0 - probs_log)
+            XVX_log = np.dot(X_msm.T, X_msm * v_diag_log[:, None])
+            inv_XVX_log = np.linalg.pinv(XVX_log + 1e-6 * np.eye(p_dim))
+            r_it_log = (sw * (y - probs_log))[:, None] * X_msm
+            cluster_scores_log = np.zeros((n_clusters, p_dim), dtype=np.float64)
+            np.add.at(cluster_scores_log, studi_inverse, r_it_log)
+            B_log = np.dot(cluster_scores_log.T, cluster_scores_log)
+            V_robust_log = np.dot(inv_XVX_log, np.dot(B_log, inv_XVX_log))
+            se_treat_log = float(np.sqrt(max(V_robust_log[1, 1], 1e-12)))
+            or_val = float(np.exp(beta_treat_log))
+
             hr_estimates[f"hr_{treat_name}"] = hr_val
-            hr_se[f"hr_{treat_name}"] = se_treat
+            hr_se[f"hr_{treat_name}"] = se_treat_cll
+            or_estimates[f"or_{treat_name}"] = or_val
+            or_se[f"or_{treat_name}"] = se_treat_log
+
+            extra_info[f"or_logit_{treat_name}"] = or_val
+            extra_info[f"or_logit_se_log_{treat_name}"] = se_treat_log
             extra_info[f"iptw_mean_{treat_name}"] = diag["mean"]
             extra_info[f"iptw_std_{treat_name}"] = diag["std"]
 
-            print(f"  • Kausale Hazard Ratio: HR = {hr_val:.4f} | 95% CI: [{ci_low:.4f}, {ci_high:.4f}] | Risikoreduktion: {rr_pct:+.2f}%")
+            print(
+                f"  • Kausale Hazard Ratio (cloglog): HR = {hr_val:.4f} | 95% CI: [{ci_low:.4f}, {ci_high:.4f}] "
+                f"| Logit OR = {or_val:.4f} | Risikoreduktion: {rr_pct:+.2f}%"
+            )
 
         # =====================================================================
         # PROTOKOLLIERUNG ÜBER CAUSAL EVALUATOR
@@ -357,16 +405,22 @@ class PyTorchMSM:
             model_name="torch_marginal_structural_model",
             base_dir=self.output_dir,
             mode=self.mode,
-            temporal=self.temporal
+            temporal=self.temporal,
+            estimand_type="HR",
+            se_scale="log",
         )
 
         extra_info["training_time_s"] = duration
         extra_info["device"] = str(self.device)
+        extra_info["link_function_primary"] = "cloglog"
+        extra_info["includes_semester_baseline_hazard"] = True
 
         metrics_dict = evaluator.evaluate_and_log(
             hr_estimates=hr_estimates,
             hr_se=hr_se,
-            extra_metrics=extra_info
+            extra_metrics=extra_info,
+            estimand_type="HR",
+            se_scale="log",
         )
 
         return metrics_dict

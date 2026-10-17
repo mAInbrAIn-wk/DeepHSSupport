@@ -13,8 +13,9 @@ from tensorflow.keras.layers import (Input, Dense, Dropout, LayerNormalization,
                                      MultiHeadAttention, Concatenate, Masking, Add, GlobalAveragePooling1D)
 from tensorflow.keras.models import Model
 
-# Import data preparation from the old script
+# Import data preparation from feature_builder
 sys.path.insert(0, str(Path('src').absolute()))
+import deepsupport.data_engine.feature_builder as fb
 from deepsupport.models.autoregressive_gru import prepare_next_exam_dataset
 from deepsupport.evaluation.metrics_logger import DualHeadEvaluator
 
@@ -24,6 +25,10 @@ PADDING_VALUE = -99.0
 class SinCosPositionalEncoding(tf.keras.layers.Layer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.supports_masking = True
+
+    def compute_mask(self, inputs, mask=None):
+        return mask
 
     def call(self, inputs):
         seq_len = tf.shape(inputs)[1]
@@ -52,13 +57,13 @@ def build_deep_transformer_dual_head(seq_timesteps: int, seq_features: int, cont
     # Eingangs-Projektion
     x = Dense(d_model, activation='relu')(x)
     
-    # NEU: Sin/Cos Positional Encoding
+    # NEU: Sin/Cos Positional Encoding mit Mask-Propagation
     x = SinCosPositionalEncoding()(x)
     
     x = LayerNormalization()(x)
     x = Dropout(dropout_rate)(x)
     
-    # Transformer Blcke
+    # Transformer Blöcke
     for _ in range(num_blocks):
         attn_out = MultiHeadAttention(num_heads=num_heads, key_dim=d_model // num_heads, dropout=dropout_rate)(x, x)
         x = Add()([x, attn_out])
@@ -98,45 +103,42 @@ def build_deep_transformer_dual_head(seq_timesteps: int, seq_features: int, cont
     model = Model(inputs=[seq_input, ctx_input], outputs=[out_grade, out_pass])
     return model
 
-def train_autoregressive_deep_transformer(data_dir=None, output_dir=None):
+def train_autoregressive_deep_transformer(data_dir=None, output_dir=None, mode: str = 'standard', epochs: int = 12, batch_size: int = 512):
     if data_dir is None:
         data_dir = Path(os.environ.get('DATA_DIR', 'data_v4_grid/S01_baseline/universe_A'))
     else:
         data_dir = Path(data_dir)
         
     if output_dir is None:
-        output_dir = data_dir
+        output_dir = Path(os.environ.get('OUTPUT_DIR', str(data_dir)))
     else:
         output_dir = Path(output_dir)
         
     print("="*70)
-    print(f" DEEP TRANSFORMER AUTOREGRESSOR + POSITIONAL ENCODING (data={data_dir}) ")
+    print(f" DEEP TRANSFORMER AUTOREGRESSOR + POSITIONAL ENCODING (data={data_dir}, mode={mode}) ")
     print("="*70)
     
-    X_hist, X_ctx, y_grade, y_pass, student_ids = prepare_next_exam_dataset(data_dir)
+    X_hist, X_ctx, y_grade, y_pass, student_ids = fb.prepare_next_exam_dataset(data_dir, mode=mode)
     
-    # Group-consistent Split on student IDs
-    unique_students = np.unique(student_ids)
-    tr_students, temp_students = train_test_split(unique_students, test_size=0.30, random_state=42)
-    va_students, te_students = train_test_split(temp_students, test_size=0.50, random_state=42)
+    # Group-consistent Split on student IDs via feature_builder
+    tr_students, va_students, te_students = fb.split_student_ids(student_ids, seed=42)
     
     tr_idx = np.where(np.isin(student_ids, tr_students))[0]
     va_idx = np.where(np.isin(student_ids, va_students))[0]
     te_idx = np.where(np.isin(student_ids, te_students))[0]
     
-    scaler_seq = StandardScaler()
+    # Zentralisierte 3D-Skalierung (behebt den NumPy Fancy-Indexing Bug X_hist_scaled[s_idx][vm] = ...)
+    scaled_hist, _ = fb.scale_3d_sequences(
+        {"train": X_hist[tr_idx], "val": X_hist[va_idx], "test": X_hist[te_idx]},
+        fit_key="train",
+        padding_value=PADDING_VALUE,
+    )
+    X_hist_tr, X_hist_va, X_hist_te = scaled_hist["train"], scaled_hist["val"], scaled_hist["test"]
+
     scaler_ctx = StandardScaler()
-    
-    vm_tr = X_hist[tr_idx, :, 0] != PADDING_VALUE
-    scaler_seq.fit(X_hist[tr_idx][vm_tr])
-    scaler_ctx.fit(X_ctx[tr_idx])
-    
-    X_hist_scaled = X_hist.copy()
-    X_ctx_scaled = X_ctx.copy()
-    for s_idx in [tr_idx, va_idx, te_idx]:
-        vm = X_hist[s_idx, :, 0] != PADDING_VALUE
-        X_hist_scaled[s_idx][vm] = scaler_seq.transform(X_hist[s_idx][vm])
-        X_ctx_scaled[s_idx] = scaler_ctx.transform(X_ctx[s_idx])
+    X_ctx_tr = scaler_ctx.fit_transform(X_ctx[tr_idx]).astype(np.float32)
+    X_ctx_va = scaler_ctx.transform(X_ctx[va_idx]).astype(np.float32)
+    X_ctx_te = scaler_ctx.transform(X_ctx[te_idx]).astype(np.float32)
         
     model = build_deep_transformer_dual_head(
         seq_timesteps=X_hist.shape[1],
@@ -146,45 +148,47 @@ def train_autoregressive_deep_transformer(data_dir=None, output_dir=None):
     
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=0.0008),
-        loss={'out_grade': 'mse', 'out_pass': 'binary_crossentropy'},
-        loss_weights={'out_grade': 1.0, 'out_pass': 0.8},
-        metrics={'out_grade': ['mae'], 'out_pass': ['accuracy']}
+        loss=['mse', 'binary_crossentropy'],
+        loss_weights=[1.0, 0.8],
+        metrics=[['mae'], ['accuracy']]
     )
     
     es = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=6, restore_best_weights=True)
     lr_sched = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=2, min_lr=1e-5, verbose=0)
     
-    print("Starte Training (Max 12 Epochen, Batch-Size 512)...")
+    # 1/K_i Sample-Gewichtung pro Studierendem (verhindert Dominanz von Langzeitstudierenden)
+    unique_tr, counts_tr = np.unique(student_ids[tr_idx], return_counts=True)
+    count_map_tr = dict(zip(unique_tr, counts_tr))
+    sw_tr = np.array([1.0 / max(1, count_map_tr[s]) for s in student_ids[tr_idx]], dtype=np.float32)
+    sw_tr *= len(sw_tr) / np.sum(sw_tr)
+
+    print(f"Starte Training (Max {epochs} Epochen, Batch-Size {batch_size}, 1/K_i gewichtet)...")
     history = model.fit(
-        {'exam_history': X_hist_scaled[tr_idx], 'next_exam_context': X_ctx_scaled[tr_idx]},
-        {'out_grade': y_grade[tr_idx], 'out_pass': y_pass[tr_idx]},
+        [X_hist_tr, X_ctx_tr],
+        [y_grade[tr_idx], y_pass[tr_idx]],
+        sample_weight=sw_tr,
         validation_data=(
-            {'exam_history': X_hist_scaled[va_idx], 'next_exam_context': X_ctx_scaled[va_idx]},
-            {'out_grade': y_grade[va_idx], 'out_pass': y_pass[va_idx]}
+            [X_hist_va, X_ctx_va],
+            [y_grade[va_idx], y_pass[va_idx]]
         ),
-        epochs=12, batch_size=512, verbose=1, callbacks=[es, lr_sched]
+        epochs=epochs, batch_size=batch_size, verbose=0, callbacks=[es, lr_sched]
     )
     
     print("\nEvaluiere auf Test-Set...")
-    preds = model.predict({'exam_history': X_hist_scaled[te_idx], 'next_exam_context': X_ctx_scaled[te_idx]}, verbose=0)
+    preds = model.predict([X_hist_te, X_ctx_te], verbose=0)
     
     r2 = r2_score(y_grade[te_idx], preds[0].flatten())
     auc = roc_auc_score(y_pass[te_idx], preds[1].flatten())
     
-    # Backward compatibility block for metrics output
-    metrics_out = {
-        'Next_Exam_Grade_R2': float(r2),
-        'Next_Exam_Pass_ROC_AUC': float(auc)
-    }
-    (output_dir / 'metrics').mkdir(exist_ok=True, parents=True)
-    with open(output_dir / 'metrics' / 'autoregressive_deep_transformer_metrics.json', 'w', encoding='utf-8') as f:
-        json.dump(metrics_out, f, indent=4)
-        
-    evaluator = DualHeadEvaluator(base_dir=output_dir, model_name='autoregressive_deep_transformer')
+    evaluator = DualHeadEvaluator(base_dir=output_dir, model_name='autoregressive_deep_transformer', mode=mode)
     evaluator.evaluate_and_log(
         y_grade_true=y_grade[te_idx], y_grade_pred=preds[0].flatten(),
         y_pass_true=y_pass[te_idx], y_pass_prob=preds[1].flatten(),
-        history=history.history, model=model
+        history=history.history, model=model, mode=mode,
+        extra_metrics={
+            'Next_Exam_Grade_R2': float(r2),
+            'Next_Exam_Pass_ROC_AUC': float(auc),
+        },
     )
         
     print(f"\nERGEBNISSE DEEP TRANSFORMER AUTOREGRESSOR (mit PE):")

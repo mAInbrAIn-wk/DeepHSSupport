@@ -30,29 +30,50 @@ from tensorflow.keras.layers import Dense, Dropout, LayerNormalization
 from tensorflow.keras.callbacks import EarlyStopping
 
 # Import metrics_logger and feature_builder
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from deepsupport.evaluation.metrics_logger import save_metrics, plot_learning_curve, save_keras_model, plot_roc_curve, plot_pr_curve, SurvivalEvaluator
 import deepsupport.data_engine.feature_builder as fb
 
 
-def breslow_cox_partial_loss(y_true, y_pred):
-    """Entrauschte Cox Partial Log-Likelihood Loss Function mit Breslow Tie-Korrektur."""
-    time = y_true[:, 0]
-    event = y_true[:, 1]
-    risk = y_pred[:, 0]
+def cox_counting_process_breslow_loss(y_true, y_pred):
+    """
+    Exakte Breslow Partial Log-Likelihood Loss Function mit Tie-Korrektur
+    über paarweise Risikoset-Maskierung (unterstützt [t_stop, event] und [t_start, t_stop, event]).
+    Vermeidet die Reihenfolge-Abhängigkeit von tf.cumsum bei zeitdiskreten Bindungen (Ties).
+    """
+    y_true = tf.cast(y_true, tf.float32)
+    risk = tf.cast(y_pred[:, 0], tf.float32)
 
-    sort_idx = tf.argsort(time, direction='DESCENDING')
-    time_sorted = tf.gather(time, sort_idx)
-    event_sorted = tf.gather(event, sort_idx)
-    risk_sorted = tf.gather(risk, sort_idx)
+    if y_true.shape[-1] == 3:
+        t_start = y_true[:, 0]
+        t_stop = y_true[:, 1]
+        event = y_true[:, 2]
+    else:
+        t_stop = y_true[:, 0]
+        event = y_true[:, 1]
+        t_start = tf.zeros_like(t_stop)
 
-    exp_risk = tf.exp(risk_sorted)
-    cum_exp_risk = tf.cumsum(exp_risk)
-    log_risk = risk_sorted - tf.math.log(cum_exp_risk + 1e-7)
+    t_stop_i = tf.expand_dims(t_stop, 1)    # (B, 1): Event-Zeit von Subjekt i
+    t_start_j = tf.expand_dims(t_start, 0)  # (1, B): Eintrittszeit von Subjekt j
+    t_stop_j = tf.expand_dims(t_stop, 0)    # (1, B): Austrittszeit von Subjekt j
 
-    uncensored_loss = -tf.reduce_sum(log_risk * event_sorted)
-    num_events = tf.reduce_sum(event_sorted) + 1e-7
+    # Subjekt j ist im Risikoset von Ereignis i, falls t_start[j] < t_stop[i] <= t_stop[j]
+    in_risk_set = tf.logical_and(t_start_j < t_stop_i, t_stop_j >= t_stop_i)
+
+    shape_bb = tf.shape(in_risk_set)
+    risk_matrix = tf.broadcast_to(tf.expand_dims(risk, 0), shape_bb)
+    neg_inf_matrix = tf.fill(shape_bb, tf.constant(-1e9, dtype=tf.float32))
+    masked_risks = tf.where(in_risk_set, risk_matrix, neg_inf_matrix)
+
+    log_denom = tf.reduce_logsumexp(masked_risks, axis=1)
+
+    uncensored_loss = -tf.reduce_sum((risk - log_denom) * event)
+    num_events = tf.reduce_sum(event) + 1e-7
     return uncensored_loss / num_events
+
+
+breslow_cox_partial_loss = cox_counting_process_breslow_loss
+
 
 
 def fast_c_index(time, event, risk_scores):
