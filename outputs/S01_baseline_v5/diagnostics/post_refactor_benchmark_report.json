@@ -1,0 +1,346 @@
+{
+  "timestamp": "2026-10-18 03:04:07",
+  "total_duration_s": 13216.75,
+  "steps": [
+    {
+      "step_name": "F1.1: Landmark Baseline Classifiers (4-Class & Binary | standard)",
+      "status": "PASSED",
+      "duration_s": 334.18,
+      "ram_start_mb": 568.5,
+      "ram_end_mb": 717.5,
+      "ram_delta_mb": 148.9,
+      "error": null,
+      "timestamp": "2026-10-17 23:29:24"
+    },
+    {
+      "step_name": "F1.2: Landmark Baseline Classifiers (4-Class & Binary | gradeblind)",
+      "status": "PASSED",
+      "duration_s": 348.32,
+      "ram_start_mb": 717.5,
+      "ram_end_mb": 797.6,
+      "ram_delta_mb": 80.1,
+      "error": null,
+      "timestamp": "2026-10-17 23:35:12"
+    },
+    {
+      "step_name": "F1.3: Landmark Baseline Regressors (Hurdle Stage 2 | standard)",
+      "status": "PASSED",
+      "duration_s": 101.34,
+      "ram_start_mb": 797.6,
+      "ram_end_mb": 864.4,
+      "ram_delta_mb": 66.8,
+      "error": null,
+      "timestamp": "2026-10-17 23:36:54"
+    },
+    {
+      "step_name": "F1.4: Landmark Baseline Regressors (Hurdle Stage 2 | gradeblind)",
+      "status": "PASSED",
+      "duration_s": 116.44,
+      "ram_start_mb": 864.4,
+      "ram_end_mb": 799.2,
+      "ram_delta_mb": -65.3,
+      "error": null,
+      "timestamp": "2026-10-17 23:38:50"
+    },
+    {
+      "step_name": "F1.5: Deep Survival Landmark (Logistic Hazard & Breslow DeepSurv | standard)",
+      "status": "PASSED",
+      "duration_s": 190.66,
+      "ram_start_mb": 799.2,
+      "ram_end_mb": 992.6,
+      "ram_delta_mb": 193.4,
+      "error": null,
+      "timestamp": "2026-10-17 23:42:01"
+    },
+    {
+      "step_name": "F2.1: Extended Cox Counting-Process [standard]",
+      "status": "PASSED",
+      "duration_s": 12.63,
+      "ram_start_mb": 992.6,
+      "ram_end_mb": 1219.5,
+      "ram_delta_mb": 227.0,
+      "error": null,
+      "timestamp": "2026-10-17 23:42:14"
+    },
+    {
+      "step_name": "F2.1: Extended Cox Counting-Process [oracle]",
+      "status": "PASSED",
+      "duration_s": 15.0,
+      "ram_start_mb": 1033.5,
+      "ram_end_mb": 1280.0,
+      "ram_delta_mb": 246.5,
+      "error": null,
+      "timestamp": "2026-10-17 23:42:29"
+    },
+    {
+      "step_name": "F2.1: Extended Cox Counting-Process [gradeblind]",
+      "status": "PASSED",
+      "duration_s": 12.61,
+      "ram_start_mb": 1075.4,
+      "ram_end_mb": 1260.9,
+      "ram_delta_mb": 185.6,
+      "error": null,
+      "timestamp": "2026-10-17 23:42:41"
+    },
+    {
+      "step_name": "F2.2: Keras Extended DeepSurv & Logistic Hazard [standard]",
+      "status": "PASSED",
+      "duration_s": 786.94,
+      "ram_start_mb": 1079.5,
+      "ram_end_mb": 995.9,
+      "ram_delta_mb": -83.6,
+      "error": null,
+      "timestamp": "2026-10-17 23:55:48"
+    },
+    {
+      "step_name": "F2.2: Keras Extended DeepSurv & Logistic Hazard [oracle]",
+      "status": "PASSED",
+      "duration_s": 430.51,
+      "ram_start_mb": 995.9,
+      "ram_end_mb": 1099.2,
+      "ram_delta_mb": 103.3,
+      "error": null,
+      "timestamp": "2026-10-18 00:02:59"
+    },
+    {
+      "step_name": "F2.3: Keras Dynamic DeepHit 3-State Softmax Competing Risks [standard]",
+      "status": "PASSED",
+      "duration_s": 96.65,
+      "ram_start_mb": 1099.2,
+      "ram_end_mb": 1062.9,
+      "ram_delta_mb": -36.2,
+      "error": null,
+      "timestamp": "2026-10-18 00:04:35"
+    },
+    {
+      "step_name": "F2.4: PyTorch Panel Survival Suite (LH, DeepHit, CoxPH, CoxTime, DeepHit-CR) [standard]",
+      "status": "PASSED",
+      "duration_s": 514.83,
+      "ram_start_mb": 1062.9,
+      "ram_end_mb": 1301.5,
+      "ram_delta_mb": 238.5,
+      "error": null,
+      "timestamp": "2026-10-18 00:13:10"
+    },
+    {
+      "step_name": "F2.4: PyTorch Panel Survival Suite (LH, DeepHit, CoxPH, CoxTime, DeepHit-CR) [oracle]",
+      "status": "PASSED",
+      "duration_s": 518.28,
+      "ram_start_mb": 1301.6,
+      "ram_end_mb": 1326.4,
+      "ram_delta_mb": 24.8,
+      "error": null,
+      "timestamp": "2026-10-18 00:21:48"
+    },
+    {
+      "step_name": "F3.1: Keras Semester Survival GRU [standard]",
+      "status": "PASSED",
+      "duration_s": 92.26,
+      "ram_start_mb": 1326.4,
+      "ram_end_mb": 1424.6,
+      "ram_delta_mb": 98.2,
+      "error": null,
+      "timestamp": "2026-10-18 00:23:21"
+    },
+    {
+      "step_name": "F3.1: Keras Semester Survival GRU [oracle]",
+      "status": "PASSED",
+      "duration_s": 90.21,
+      "ram_start_mb": 1424.6,
+      "ram_end_mb": 1476.5,
+      "ram_delta_mb": 51.8,
+      "error": null,
+      "timestamp": "2026-10-18 00:24:51"
+    },
+    {
+      "step_name": "F3.2: Keras Semester Causal Transformer Survival [standard]",
+      "status": "PASSED",
+      "duration_s": 61.46,
+      "ram_start_mb": 1476.5,
+      "ram_end_mb": 1536.5,
+      "ram_delta_mb": 60.0,
+      "error": null,
+      "timestamp": "2026-10-18 00:25:52"
+    },
+    {
+      "step_name": "F3.3: Keras Exam Survival GRU [standard]",
+      "status": "PASSED",
+      "duration_s": 156.74,
+      "ram_start_mb": 1536.5,
+      "ram_end_mb": 1715.4,
+      "ram_delta_mb": 178.9,
+      "error": null,
+      "timestamp": "2026-10-18 00:28:29"
+    },
+    {
+      "step_name": "F3.4: Keras Exam Causal Transformer Survival [standard]",
+      "status": "PASSED",
+      "duration_s": 417.76,
+      "ram_start_mb": 1715.4,
+      "ram_end_mb": 1863.8,
+      "ram_delta_mb": 148.4,
+      "error": null,
+      "timestamp": "2026-10-18 00:35:27"
+    },
+    {
+      "step_name": "F3.5: Keras Modern Deep Transformer Suite (Sem-Reg, Exam-Reg, Exam-Surv | gradeblind)",
+      "status": "PASSED",
+      "duration_s": 892.93,
+      "ram_start_mb": 1863.8,
+      "ram_end_mb": 2257.2,
+      "ram_delta_mb": 393.4,
+      "error": null,
+      "timestamp": "2026-10-18 00:50:20"
+    },
+    {
+      "step_name": "F3.6: PyTorch Sequence Survival & Transformer Suite (Sem-GRU, Sem-Trans, Exam-GRU, Dyn-DeepHit, Exam-Reg, Exam-Surv)",
+      "status": "PASSED",
+      "duration_s": 751.77,
+      "ram_start_mb": 2257.2,
+      "ram_end_mb": 2200.3,
+      "ram_delta_mb": -56.9,
+      "error": null,
+      "timestamp": "2026-10-18 01:02:52"
+    },
+    {
+      "step_name": "F3.7: PyTorch Dynamic DeepHit (Causal Step-Hazard Fix | standard)",
+      "status": "PASSED",
+      "duration_s": 37.29,
+      "ram_start_mb": 2200.3,
+      "ram_end_mb": 2229.4,
+      "ram_delta_mb": 29.1,
+      "error": null,
+      "timestamp": "2026-10-18 01:03:29"
+    },
+    {
+      "step_name": "F4.1: Keras Autoregressive Next-Exam Dual-Head GRU (1/K_i weighted | standard)",
+      "status": "PASSED",
+      "duration_s": 453.38,
+      "ram_start_mb": 2213.3,
+      "ram_end_mb": 2407.3,
+      "ram_delta_mb": 193.9,
+      "error": null,
+      "timestamp": "2026-10-18 01:11:02"
+    },
+    {
+      "step_name": "F4.2: Evaluation Autoregressive Next-Exam Fail PR-AUC",
+      "status": "PASSED",
+      "duration_s": 52.48,
+      "ram_start_mb": 2407.3,
+      "ram_end_mb": 2463.4,
+      "ram_delta_mb": 56.1,
+      "error": null,
+      "timestamp": "2026-10-18 01:11:55"
+    },
+    {
+      "step_name": "F4.3: Keras Autoregressive Next-Exam Deep Transformer (Sin/Cos PE, 1/K_i weighted | standard)",
+      "status": "PASSED",
+      "duration_s": 2063.42,
+      "ram_start_mb": 2463.4,
+      "ram_end_mb": 2480.9,
+      "ram_delta_mb": 17.5,
+      "error": null,
+      "timestamp": "2026-10-18 01:46:18"
+    },
+    {
+      "step_name": "F5.1: Landmark Representation Learning (Headless Transformer -> XGBoost 4-Class & Hurdle Reg)",
+      "status": "PASSED",
+      "duration_s": 40.45,
+      "ram_start_mb": 2480.9,
+      "ram_end_mb": 2524.1,
+      "ram_delta_mb": 43.2,
+      "error": null,
+      "timestamp": "2026-10-18 01:46:59"
+    },
+    {
+      "step_name": "F4.4: PyTorch Autoregressive Next-Exam Dual-Head GRU (1/K_i weighted | standard)",
+      "status": "PASSED",
+      "duration_s": 370.49,
+      "ram_start_mb": 2524.1,
+      "ram_end_mb": 2556.7,
+      "ram_delta_mb": 32.6,
+      "error": null,
+      "timestamp": "2026-10-18 01:53:09"
+    },
+    {
+      "step_name": "F4.5: PyTorch Autoregressive Next-Exam Dual-Head Transformer (1/K_i weighted | standard)",
+      "status": "PASSED",
+      "duration_s": 1837.71,
+      "ram_start_mb": 2548.7,
+      "ram_end_mb": 2764.1,
+      "ram_delta_mb": 215.4,
+      "error": null,
+      "timestamp": "2026-10-18 02:23:47"
+    },
+    {
+      "step_name": "F6.1: Keras Orthogonal DML Survival (5-Fold GroupKFold + Multivariate Robinson) [standard]",
+      "status": "PASSED",
+      "duration_s": 39.54,
+      "ram_start_mb": 2749.1,
+      "ram_end_mb": 2718.8,
+      "ram_delta_mb": -30.3,
+      "error": null,
+      "timestamp": "2026-10-18 02:24:26"
+    },
+    {
+      "step_name": "F6.2: Keras Deep Transformer-DML (64-D Causal Embedding + 5-Fold GroupKFold) [standard]",
+      "status": "PASSED",
+      "duration_s": 196.94,
+      "ram_start_mb": 2718.8,
+      "ram_end_mb": 2773.0,
+      "ram_delta_mb": 54.2,
+      "error": null,
+      "timestamp": "2026-10-18 02:27:43"
+    },
+    {
+      "step_name": "F6.3: PyTorch Causal Suite (DML, MSM cloglog/logit, G-Computation) [standard]",
+      "status": "PASSED",
+      "duration_s": 934.92,
+      "ram_start_mb": 2773.0,
+      "ram_end_mb": 2745.4,
+      "ram_delta_mb": -27.6,
+      "error": null,
+      "timestamp": "2026-10-18 02:43:18"
+    },
+    {
+      "step_name": "F6.1: Keras Orthogonal DML Survival (5-Fold GroupKFold + Multivariate Robinson) [oracle]",
+      "status": "PASSED",
+      "duration_s": 39.53,
+      "ram_start_mb": 2745.4,
+      "ram_end_mb": 2770.7,
+      "ram_delta_mb": 25.3,
+      "error": null,
+      "timestamp": "2026-10-18 02:43:58"
+    },
+    {
+      "step_name": "F6.2: Keras Deep Transformer-DML (64-D Causal Embedding + 5-Fold GroupKFold) [oracle]",
+      "status": "PASSED",
+      "duration_s": 193.01,
+      "ram_start_mb": 2770.7,
+      "ram_end_mb": 2827.4,
+      "ram_delta_mb": 56.7,
+      "error": null,
+      "timestamp": "2026-10-18 02:47:11"
+    },
+    {
+      "step_name": "F6.3: PyTorch Causal Suite (DML, MSM cloglog/logit, G-Computation) [oracle]",
+      "status": "PASSED",
+      "duration_s": 944.57,
+      "ram_start_mb": 2827.4,
+      "ram_end_mb": 2764.0,
+      "ram_delta_mb": -63.4,
+      "error": null,
+      "timestamp": "2026-10-18 03:02:55"
+    },
+    {
+      "step_name": "F6.4: Unified Ground-Truth Benchmark & KI-Policy-Targeting Uplift Showcase",
+      "status": "PASSED",
+      "duration_s": 71.5,
+      "ram_start_mb": 2764.0,
+      "ram_end_mb": 2777.2,
+      "ram_delta_mb": 13.2,
+      "error": null,
+      "timestamp": "2026-10-18 03:04:07"
+    }
+  ]
+}

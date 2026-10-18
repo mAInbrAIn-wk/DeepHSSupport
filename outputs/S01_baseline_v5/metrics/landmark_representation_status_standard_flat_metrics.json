@@ -1,0 +1,83 @@
+{
+    "model_name": "landmark_representation_status",
+    "mode": "standard",
+    "temporal_type": "flat",
+    "n_samples": 6934,
+    "n_classes": 4,
+    "roc_auc_ovr_macro": 0.8720517723096348,
+    "f1_macro": 0.4150355879913484,
+    "f1_weighted": 0.7886773509399221,
+    "balanced_accuracy": 0.3901237978536403,
+    "pr_auc_0": 0.9404978136802302,
+    "pr_auc_1": 0.3870506013513584,
+    "pr_auc_2": 0.4558581968540654,
+    "pr_auc_3": 0.005196925611894977,
+    "per_class": {
+        "0": {
+            "precision": 0.8662,
+            "recall": 0.9582,
+            "f1-score": 0.9099,
+            "support": 5386.0,
+            "prevalence_baseline": 0.7768,
+            "pr_auc": 0.9405
+        },
+        "1": {
+            "precision": 0.4585,
+            "recall": 0.2995,
+            "f1-score": 0.3623,
+            "support": 1182.0,
+            "prevalence_baseline": 0.1705,
+            "pr_auc": 0.3871
+        },
+        "2": {
+            "precision": 0.5396,
+            "recall": 0.3028,
+            "f1-score": 0.3879,
+            "support": 360.0,
+            "prevalence_baseline": 0.0519,
+            "pr_auc": 0.4559
+        },
+        "3": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1-score": 0.0,
+            "support": 6.0,
+            "prevalence_baseline": 0.0009,
+            "pr_auc": 0.0052
+        }
+    },
+    "per_class_metrics": {
+        "0": {
+            "precision": 0.8662,
+            "recall": 0.9582,
+            "f1-score": 0.9099,
+            "support": 5386.0,
+            "prevalence_baseline": 0.7768,
+            "pr_auc": 0.9405
+        },
+        "1": {
+            "precision": 0.4585,
+            "recall": 0.2995,
+            "f1-score": 0.3623,
+            "support": 1182.0,
+            "prevalence_baseline": 0.1705,
+            "pr_auc": 0.3871
+        },
+        "2": {
+            "precision": 0.5396,
+            "recall": 0.3028,
+            "f1-score": 0.3879,
+            "support": 360.0,
+            "prevalence_baseline": 0.0519,
+            "pr_auc": 0.4559
+        },
+        "3": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1-score": 0.0,
+            "support": 6.0,
+            "prevalence_baseline": 0.0009,
+            "pr_auc": 0.0052
+        }
+    }
+}

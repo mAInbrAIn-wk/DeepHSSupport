@@ -1,0 +1,13 @@
+{
+    "model_name": "mlp_regression_gradeblind",
+    "mode": "gradeblind",
+    "temporal_type": "flat",
+    "n_samples": 5414,
+    "r2_score": 0.7190181277558256,
+    "adj_r2": null,
+    "rmse": 0.31723016700687157,
+    "mae": 0.24756407989097512,
+    "median_ae": 0.20129326105117795,
+    "explained_variance": 0.7215419486309961,
+    "max_error": 1.3564564847946166
+}

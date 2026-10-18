@@ -60,12 +60,23 @@ tags: [protokoll, refactoring, v4.2.5, dgp-v5, unit-tests, benchmark, breslow, d
 
 ---
 
+### D. Vollständige DGP-V5.0-Generierung ($N = 50{,}000$, 8 Universen A–H) & 34-Schritte-Modell-Benchmark (`outputs/S01_baseline_v5/`)
+- **Multi-Universe-Generierung (`data_v5_grid/S01_baseline/`):**
+  - Über [`run_v5_generation_and_benchmark.py`](../../src/deepsupport/runners/run_v5_generation_and_benchmark.py) wurden alle 8 kontrafaktischen Universen (`A` bis `H`, je $N = 50{,}000$, `seed=99999`) in `75,84 Min.` generiert und per DuckDB voraggregiert (`0,52 Min.`).
+  - Exakte V5.0 Ground Truth: Universum A $= \mathbf{27{,}82\,\%}$ Dropout (`852.646` Prüfungen, `131.616` Support-Teilnahmen) vs. Universum B $= \mathbf{35{,}47\,\%}$ Dropout ($\text{ARR}_{A \text{ vs. } B} = \mathbf{+7{,}65\,\text{pp}}$, $\text{RR}_{A/B} = \mathbf{0{,}7843}$, $\text{NNT} = 13{,}1$).
+- **34-Schritte-Modelltraining auf DGP V5.0 (`220,28 Min.`, `34/34 PASSED`):**
+  - Sämtliche >25 Modelle über alle 6 Familien wurden auf `data_v5_grid/S01_baseline/universe_A` trainiert (`outputs/S01_baseline_v5/`).
+  - Systematischer Diskriminations- und Kalibrierungsgewinn über alle dynamischen Survival- und Sequenzmodelle (`Extended Cox oracle` C-Index: `0,6980` $\to$ **`0,7288`**, `Keras Exam Survival GRU` ROC-AUC: `0,8791` $\to$ **`0,9008`**, `PyTorch Exam Survival GRU`: **`0,9054`**, `Landmark Representation Learning` $R^2$: `0,7865` $\to$ **`0,8404`**) sowie konsistente Kausalidentifikation über alle drei Förderkanäle in `Keras/PyTorch Orthogonal DML` und `PyTorch MSM` ([modell_gegenueberstellung_v41_vs_v50.md](../03_evaluations_and_benchmarks/modell_gegenueberstellung_v41_vs_v50.md)).
+
+---
+
 ## Verwandte Dokumente
 
 | Dokument | Bezug |
 |:---|:---|
+| [Modell-Gegenüberstellung DGP V4.1 vs. DGP V5.0](../03_evaluations_and_benchmarks/modell_gegenueberstellung_v41_vs_v50.md) | Direkter Head-to-Head-Vergleich aller 8 Universen und 6 Modellfamilien zwischen DGP V4.1 und DGP V5.0 |
 | [Modell-Gegenüberstellung Gesamt V4.2.5](../03_evaluations_and_benchmarks/modell_gegenueberstellung_gesamt_v425.md) | Vollständiger Vorher-Nachher-Vergleich aller >25 Modelle (V4.2 vs. V4.2.5) |
 | [Kausaler Ground-Truth Benchmark](../03_evaluations_and_benchmarks/causal_ground_truth_benchmark.md) | Parallelwelten-Validierung & KI-Policy-Targeting ($2{,}39\times$ Effizienzgewinn) |
 | [Config-Audit & V5-Roadmap](../04_causal_and_simulation/config_audit_und_v5_roadmap.md) | DGP V5.0 Spezifikation, $N=50.000$ Verifikation & Spätsemester-Apathie-Analyse |
 | [Master-Synopse V4 Gesamt](../03_evaluations_and_benchmarks/master_synopse_v4_gesamt.md) | Cross-Szenario-Referenz über alle 15 Szenarien |
-| [ToDo & Aktuelle Baustellen](../../ToDo.md) | Aktueller Projektstand und nächste Schritte (V5-Generierung & Modelltraining) |
+| [ToDo & Aktuelle Baustellen](../../ToDo.md) | Aktueller Projektstand und Backlog |

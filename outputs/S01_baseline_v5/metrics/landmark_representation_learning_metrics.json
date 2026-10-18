@@ -1,0 +1,8 @@
+{
+    "Landmark_Status_Accuracy": 0.8110758580905683,
+    "Landmark_Status_Macro_F1": null,
+    "Landmark_Status_ROC_AUC_OVR": 0.8720517723096348,
+    "Landmark_Grad_R2": 0.8404196120713874,
+    "Landmark_Grad_RMSE": 0.24027070558384886,
+    "Landmark_Grad_MAE": 0.18616365601358636
+}

@@ -1,6 +1,6 @@
 ---
 created: 2026-09-02
-last_updated: 2026-10-17
+last_updated: 2026-10-18
 status: abgeschlossen
 tags: [dokumentation, index, navigation]
 ---
@@ -31,8 +31,9 @@ Dieses Verzeichnis bündelt alle architektonischen Entscheidungen (ADRs), Kausal
 
 ---
 
-### 3. [03_evaluations_and_benchmarks/](03_evaluations_and_benchmarks/) — Synopsen & Benchmarks (V4.2 / V4.2.5)
+### 3. [03_evaluations_and_benchmarks/](03_evaluations_and_benchmarks/) — Synopsen & Benchmarks (V4.2 / V4.2.5 / V5.0)
 - **Gesamtsynthesen & Modell-Gegenüberstellungen:**
+  - [`modell_gegenueberstellung_v41_vs_v50.md`](03_evaluations_and_benchmarks/modell_gegenueberstellung_v41_vs_v50.md): **Direkte Gegenüberstellung DGP V4.1 vs. DGP V5.0 über alle 8 Universen und 6 Modellfamilien** (34/34 Benchmark-Schritte auf `data_v5_grid/S01_baseline`).
   - [`modell_gegenueberstellung_gesamt_v425.md`](03_evaluations_and_benchmarks/modell_gegenueberstellung_gesamt_v425.md): **Vollständige Side-by-Side-Gegenüberstellung aller >25 Modelle aus dem V4.2.5 Post-Refactor Benchmark** (alle 6 Modellfamilien, Pre- vs. Post-Refactor, Keras 3 vs. PyTorch 2.x Paritätsanalyse).
   - [`master_synopse_v4_gesamt.md`](03_evaluations_and_benchmarks/master_synopse_v4_gesamt.md): **Master-Synthese über alle 15 Szenarien und 225 DL-Modelle** des Feature Grids.
   - [`causal_ground_truth_benchmark.md`](03_evaluations_and_benchmarks/causal_ground_truth_benchmark.md): **Vereinheitlichter Kausaler Ground-Truth Benchmark & KI-Policy-Targeting Showcase** (8 Parallelwelten vs. Cox/MSM/DML/G-Computation & 20%-Budget-Allokation).

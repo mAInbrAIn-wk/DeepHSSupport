@@ -101,8 +101,7 @@ Um den kausalen Effekt isoliert messbar zu machen, ist das Prüfungsrauschen in 
 *Hinweis zur methodischen Grenze:* Diese Synchronisation ist eine bewusste Designentscheidung. Ein stochastischer „Schmetterlingseffekt“ (z. B. verändertes Schlafverhalten bei Supportnutzung) würde die Kontrafakten leicht verschieben – die gewählte Variante maximiert jedoch die interne Validität für das Algorithmen-Benchmarking.
 
 ### Die wahre Kausalität im Datensatz (Ground Truth, $N=50.000$):
-- **Gesamteffekt (A vs. B):** Der Support senkt die Studienabbruchquote von **37,10 % auf 29,20 %**.  
-  $\implies$ **Absolute Risikoreduktion ($ARR$): $7{,}90\,\text{pp}$** | **Relatives Risiko ($RR$): $0{,}787$ ($-21{,}3\,\%$)**
+- **Gesamteffekt (A vs. B):** Der Support senkt die Studienabbruchquote in **DGP V4.1** von **37,12 % auf 29,21 %** ($\text{ARR} = 7{,}91\,\text{pp}$, $\text{RR} = 0{,}7868$, $-21{,}3\,\%$) bzw. im rekalibrierten **DGP V5.0** von **35,47 % auf 27,82 %** ($\text{ARR} = 7{,}65\,\text{pp}$, $\text{RR} = 0{,}7843$, $-21{,}6\,\%$).
 - **Verweildauer bei Abbruch:** Support verlängert nicht das Scheitern, sondern **verkürzt die Verweildauer von Abbrechern** um ein halbes Semester ($4{,}48$ vs. $4{,}94$ Semester) – falsche Studienentscheidungen werden schneller korrigiert.
 
 ---
@@ -156,7 +155,8 @@ flowchart TD
 
 > [!NOTE]
 > **Epistemische Einordnung:** Die absoluten Kennzahlen ($R^2$, ROC-AUC) spiegeln die Gesetzmäßigkeiten des synthetischen Generators wider. Der wissenschaftliche Erkenntnisgewinn liegt im **relativen Vergleich der Methoden**, da alle Architekturen auf exakt derselben Datenbasis konkurrieren.  
-> **Vollständige Side-by-Side-Gegenüberstellung aller >25 Modelle (alle 6 Modellfamilien, Pre- vs. Post-Refactor V4.2.5, Keras 3 vs. PyTorch 2.x):** **[`modell_gegenueberstellung_gesamt_v425.md`](docs/03_evaluations_and_benchmarks/modell_gegenueberstellung_gesamt_v425.md)**.
+> - **Vollständige Side-by-Side-Gegenüberstellung aller >25 Modelle (alle 6 Modellfamilien, Pre- vs. Post-Refactor V4.2.5, Keras 3 vs. PyTorch 2.x):** **[`modell_gegenueberstellung_gesamt_v425.md`](docs/03_evaluations_and_benchmarks/modell_gegenueberstellung_gesamt_v425.md)**.  
+> - **Direkter Head-to-Head-Benchmark DGP V4.1 vs. DGP V5.0 (alle 8 Universen & 34 Modellschritte):** **[`modell_gegenueberstellung_v41_vs_v50.md`](docs/03_evaluations_and_benchmarks/modell_gegenueberstellung_v41_vs_v50.md)**.
 
 ### A. Kausale Inferenz: Unified Ground-Truth Benchmark & KI-Policy-Targeting
 

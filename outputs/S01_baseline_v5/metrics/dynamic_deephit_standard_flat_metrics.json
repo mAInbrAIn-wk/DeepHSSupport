@@ -1,0 +1,10 @@
+{
+    "model_type": "dynamic_deephit_prev",
+    "temporal": "prev",
+    "mode": "standard",
+    "ROC-AUC_Dropout": 0.8162342338065169,
+    "PR-AUC_Dropout": 0.26356343453214115,
+    "Brier_Score_Dropout": 0.03419644758105278,
+    "ROC-AUC_Graduation": 0.999268302028614,
+    "PR-AUC_Graduation": 0.9931771699317851
+}

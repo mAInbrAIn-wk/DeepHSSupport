@@ -1,0 +1,14 @@
+{
+    "model_name": "torch_exam_transformer_regressor",
+    "mode": "gradeblind",
+    "temporal_type": "prev",
+    "n_samples": 5414,
+    "r2_score": 0.7695488929748535,
+    "adj_r2": null,
+    "rmse": 0.2872928111242819,
+    "mae": 0.22680966556072235,
+    "median_ae": 0.18646115064620972,
+    "explained_variance": 0.769585907459259,
+    "max_error": 1.2494796514511108,
+    "training_time_s": 175.73332142829895
+}

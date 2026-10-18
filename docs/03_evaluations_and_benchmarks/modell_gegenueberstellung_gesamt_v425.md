@@ -1,6 +1,6 @@
 ---
 created: 2026-10-17
-last_updated: 2026-10-17
+last_updated: 2026-10-18
 status: abgeschlossen
 tags: [benchmark, v4.2.5, post-refactor, keras, pytorch, model-comparison, survival, causal-inference]
 ---
@@ -9,7 +9,7 @@ tags: [benchmark, v4.2.5, post-refactor, keras, pytorch, model-comparison, survi
 
 > [!IMPORTANT]
 > **Epistemischer Rahmen & Synthetische Benchmark-Validierung**  
-> Sämtliche in diesem Dokument berichteten Metriken entstammen dem vollständigen **Post-Refactor Master-Benchmark (V4.2.5)** auf dem synthetischen Referenz-Szenario `data_v4_grid/S01_baseline/universe_A` ($N = 50.000$ Studierende, `seed=99999`, Split-Seed `42`). Da der datengenerierende Prozess (DGP V4.1) vollständig spezifiziert ist, dienen diese Ergebnisse **nicht** dem empirischen Nachweis realweltlicher hochschuldidaktischer Hypothesen, sondern der **methodischen Verifikation der Modellierungs-, Kalibrierungs- und Deconfounding-Kette**:
+> Sämtliche in diesem Dokument berichteten Metriken entstammen dem vollständigen **Post-Refactor Master-Benchmark (V4.2.5)** auf dem synthetischen Referenz-Szenario `data_v4_grid/S01_baseline/universe_A` ($N = 50.000$ Studierende, `seed=99999`, Split-Seed `42`). Für den direkten **Head-to-Head-Vergleich gegen den rekalibrierten Datengenerator DGP V5.0 (`data_v5_grid/S01_baseline` / `outputs/S01_baseline_v5/`)** über alle 8 Universen und 6 Modellfamilien siehe **[`modell_gegenueberstellung_v41_vs_v50.md`](modell_gegenueberstellung_v41_vs_v50.md)**. Da der datengenerierende Prozess vollständig spezifiziert ist, dienen diese Ergebnisse **nicht** dem empirischen Nachweis realweltlicher hochschuldidaktischer Hypothesen, sondern der **methodischen Verifikation der Modellierungs-, Kalibrierungs- und Deconfounding-Kette**:
 > 1. **Prädiktive Diskrimination & Wahrscheinlichkeitskalibrierung:** Vergleich klassischer tabellarischer Verfahren, zeitdiskreter Counting-Process-Survival-Modelle, kausaler 3D-Sequenzarchitekturen (GRU / Transformer) und autoregressiver Multi-Task-Modelle.
 > 2. **Framework-Parität (Keras 3 vs. PyTorch 2.x):** Überprüfung, ob mathematisch äquivalente Architekturen in beiden Deep-Learning-Backends konsistente Schätzwerte liefern.
 > 3. **Kausale Identifikation unter Selektionsbias:** Abgleich geschätzter Behandlungseffekte ($\text{HR}, \text{RR}, \text{ARR}$) gegen die exakt bekannte kontrafaktische Simulator-Ground-Truth ($\text{RR}_{\text{true}}(\text{A vs. B}) = 0{,}7868$, $\text{ARR}_{\text{true}} = +7{,}91\text{ pp}$).
@@ -288,11 +288,12 @@ C:\GitHub_public\.venv\Scripts\python.exe src/deepsupport/runners/run_post_refac
 
 | Dokument | Thema & Verbindung zu dieser Gegenüberstellung |
 | :--- | :--- |
+| **[Modell-Gegenüberstellung DGP V4.1 vs. DGP V5.0](modell_gegenueberstellung_v41_vs_v50.md)** | **Head-to-Head-Vergleich aller 8 Universen und 6 Modellfamilien (>25 Modelle) zwischen DGP V4.1 und DGP V5.0** |
 | **[Master-Synopse V4.2](master_synopse_v4_gesamt.md)** | Übergeordnete Gesamtsynopse über alle 15 Sensitivitätsszenarien (S01–S15), HSKL/SoliD-Hintergrund und Apathie-Hypothese (S16) |
 | **[Kausaler Ground-Truth Benchmark](causal_ground_truth_benchmark.md)** | Detaillierter mathematischer und empirischer Vergleich der 6 Kausalmodelle (Familie 6) gegen die kontrafaktischen Parallelwelten A–H |
 | **[Synopse Heavy Suite (S01, S07, S08)](synopse_heavy_suite_s01_s07_s08.md)** | Verhalten der PyTorch-Panel-, Sequenz- und Kausalmodelle unter halbiertem (S07) und verdoppeltem (S08) exogenem Prüfungsrauschen |
 | **[Modellarchitekturen im Detail](../02_architectures_and_models/model_architectures.md)** | Architektonische Spezifikation aller >25 Modelle, Loss-Funktionen und Tensor-Dimensionen |
 | **[Kausale Vergleichsanalyse](../04_causal_and_simulation/04_Kausale_Vergleichsanalyse.md)** | Theoretische Herleitung von Robinson-DML, IPTW-MSM und G-Computation unter zeitabhängigem Confounding |
-| **[Config-Audit & V5-Roadmap](../04_causal_and_simulation/config_audit_und_v5_roadmap.md)** | Spezifikation des anstehenden Generator-Upgrades auf Version 5 ($\kappa_{\text{Motivation}}=9{,}0$, Zero-Inflated Erwerbstätigkeit, S16 Spätkrisen-Test) |
+| **[Config-Audit & V5-Roadmap](../04_causal_and_simulation/config_audit_und_v5_roadmap.md)** | Spezifikation des Generator-Upgrades auf Version 5 ($\kappa_{\text{Motivation}}=9{,}0$, Zero-Inflated Erwerbstätigkeit, S16 Spätkrisen-Test) |
 | **[Refactoring-Plan Evaluation Pipeline](../01_master_plans/refactoring_plan_evaluation_pipeline1.md)** | Spezifikation der 5 OOP-Evaluator-Klassen (`SurvivalEvaluator`, `RegressionEvaluator`, `MulticlassEvaluator`, `DualHeadEvaluator`, `CausalEvaluator`) |
 | **[Kritische Projektbewertung](../08_project_evolution/DeepSupport_Kritische_Bewertung.md)** | Methodische Stärken-Schwächen-Analyse und Einordnung der durch das V4.2.5-Refactoring geschlossenen Lücken |

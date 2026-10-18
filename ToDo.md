@@ -1,6 +1,6 @@
 ---
 created: 2026-09-02
-last_updated: 2026-10-17
+last_updated: 2026-10-18
 status: aktiv
 tags: [todo, roadmap, tasks, v5-roadmap, deep-transformer, pytorch, unit-tests]
 ---
@@ -14,7 +14,7 @@ tags: [todo, roadmap, tasks, v5-roadmap, deep-transformer, pytorch, unit-tests]
 - [x] **Klassenspezifische Evaluatoren implementieren (V4.2.2 / V4.2.5):** Vollständige Ablösung des manuellen Logging-Boilerplates durch 5 modulare OOP-Evaluator-Klassen (`SurvivalEvaluator`, `RegressionEvaluator`, `MulticlassEvaluator`, `CausalEvaluator`, `DualHeadEvaluator`), PR-AUC für alle Klassen, Skalen-getreue Dual-CIs (Delta-Methode für `HR`/`RR`, lineare CIs für `ATE`/`ARR`).
 - [x] **Methoden-Härtung & Post-Refactor Gesamt-Benchmark (V4.2.5):** Behebung der 5 numerischen/methodischen Kernbugs (Breslow Float32 LSE-Underflow, Counting-Process Left-Truncation, 3D-Sequenzskalierung, Student-Clustered Liang-Zeger SEs & multinomialer Bootstrap, Hurdle-Regression) und vollständiger Neu-Lauf aller >25 Modelle ([`modell_gegenueberstellung_gesamt_v425.md`](docs/03_evaluations_and_benchmarks/modell_gegenueberstellung_gesamt_v425.md)).
 - [x] **Automatisierte Unit-Test-Suite (`tests/`, 23 Tests):** 100% grüne Testabdeckung (`Ran 23 tests in 14.05s — OK`) über Survival-Losses, Kausalschätzer, Splits/Skalierung, Evaluatoren und den DGP-V5.0-Simulator.
-- [ ] **Phase 4 (DGP V5.0 Datengenerierung & Komplett-Benchmark):** Generierung eines vollständigen V5.0-Referenzdatensatzes ($N=50.000$, 8 Universen A–H in separatem Verzeichnis `data_v5_grid/S01_baseline`) und Training/Evaluation aller 6 Modellfamilien auf den neuen V5.0-Daten.
+- [x] **Phase 4 (DGP V5.0 Datengenerierung & Komplett-Benchmark):** Generierung des vollständigen V5.0-Referenzdatensatzes ($N=50.000$, 8 Universen A–H in `data_v5_grid/S01_baseline`) und 34/34-Schritte-Training/Evaluation aller 6 Modellfamilien (`outputs/S01_baseline_v5/`, dokumentiert in [`modell_gegenueberstellung_v41_vs_v50.md`](docs/03_evaluations_and_benchmarks/modell_gegenueberstellung_v41_vs_v50.md)).
 
 ---
 
@@ -49,7 +49,7 @@ tags: [todo, roadmap, tasks, v5-roadmap, deep-transformer, pytorch, unit-tests]
   - Migrationshintergrund: Anpassung auf bundesweite DSW-Quote ($28\,\%$).
   - Geschlechterverteilung: Fachbereichsgenaue Matrizen pro Studiengang aus Destatis Fachserie 11 (`SG01`: $24\,\%$ w, `SG02`: $48\,\%$ w, `SG03`: $23\,\%$ w, `SG04`: $78\,\%$ w, `SG05`: $76\,\%$ w).
   - Abgesichert durch 5 dedizierte Unit-Tests in [`tests/test_simulation_v5.py`](tests/test_simulation_v5.py).
-- [ ] **Phase 4 (V5-Generierung $N=50.000$ & Komplett-Benchmark aller Modelle):** Vollständiger Simulationslauf in separatem Verzeichnis (`data_v5_grid/S01_baseline`) und Re-Benchmarking aller >25 Kausal-, Survival-, Sequenz- und Regressionsmodelle (`outputs/S01_baseline_v5/`).
+- [x] **Phase 4 (V5-Generierung $N=50.000$ & Komplett-Benchmark aller Modelle):** Vollständiger Simulationslauf in separatem Verzeichnis (`data_v5_grid/S01_baseline`) und Re-Benchmarking aller >25 Kausal-, Survival-, Sequenz- und Regressionsmodelle (`outputs/S01_baseline_v5/`, [`modell_gegenueberstellung_v41_vs_v50.md`](docs/03_evaluations_and_benchmarks/modell_gegenueberstellung_v41_vs_v50.md)).
 - [ ] **Nice-to-Have / Backlog (Gradeblind Oracle Exploration):** Theoretische Obergrenze der GPA-Vorhersage rein aus latenten DGP-Ressourcen ohne Noten.
 - [ ] **Nice-to-Have / Backlog (Dynamische Trajektorien):** Modellierung des Studienverlaufs als Desillusions- und Entfremdungsprozess (Eccles & Wigfield; Heublein et al. 2017/2022).
 - [ ] **Nice-to-Have / Backlog (Realism-Mode):** Stochastischer Peer-Graph pro Kohorte zur Abbildung von Lerngruppen-Synergien und Isolationsrisiken (Tinto-Netzwerkmodell).

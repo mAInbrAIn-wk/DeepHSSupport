@@ -3,8 +3,11 @@
 Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
-## [V5.0.0 & V4.2.5 Post-Refactor Gesamt-Benchmark, Kausales Policy-Targeting & DGP Version 5] - 2026-10-17
+## [V5.0.0 & V4.2.5 Post-Refactor Gesamt-Benchmark, Kausales Policy-Targeting & DGP Version 5] - 2026-10-17 / 2026-10-18
 ### Added
+- **Vollständige DGP-V5.0-Generierung ($N = 50{,}000$, 8 Universen A–H) & 34-Schritte-Modell-Benchmark (`docs/03_evaluations_and_benchmarks/modell_gegenueberstellung_v41_vs_v50.md`):**
+  - Generierung aller 8 kontrafaktischen Parallelwelten (`data_v5_grid/S01_baseline/`, `seed=99999`) und DuckDB-Voraggregation via `src/deepsupport/runners/run_v5_generation_and_benchmark.py`. Exakte V5.0 Ground Truth: Universum A $= 27{,}82\,\%$ Dropout vs. Universum B $= 35{,}47\,\%$ Dropout ($\text{ARR}_{A \text{ vs. } B} = +7{,}65\,\text{pp}$, $\text{RR}_{A/B} = 0{,}7843$, $\text{NNT} = 13{,}1$).
+  - Kompletter 34-Schritte-Trainings- und Evaluationslauf über alle 6 Modellfamilien auf `data_v5_grid/S01_baseline/universe_A` (`outputs/S01_baseline_v5/`, `34/34 PASSED`) mit systematischem Diskriminations- und Deconfounding-Gewinn gegenüber DGP V4.1 (`Extended Cox oracle` C-Index $+3{,}08\,\text{pp}$, `Keras Exam Survival GRU` ROC-AUC $+2{,}17\,\text{pp}$ auf `0,9008`, `PyTorch Exam Survival GRU` `0,9054`, `Landmark Representation Learning` $R^2 +5{,}39\,\text{pp}$ auf `0,8404`).
 - **Vollständige Modell-Gegenüberstellung V4.2.5 (`docs/03_evaluations_and_benchmarks/modell_gegenueberstellung_gesamt_v425.md`):**
   - Kompletter Neu-Lauf aller 34 Benchmark-Schritte (>25 Modelle über alle 6 Familien in Keras 3 & PyTorch 2.x) via `src/deepsupport/runners/run_post_refactor_benchmark_s01.py`.
   - Side-by-Side-Abgleich Pre-Refactor (V4.2) vs. Post-Refactor (V4.2.5) sowie Dual-Framework-Paritätsanalyse Keras 3 vs. PyTorch 2.x.

@@ -285,13 +285,22 @@ Die Einhaltung aller V5-Spezifikationen wird durch 5 dedizierte Unit-Tests in `t
 4. **`test_v5_apathy_dampening_mechanism_and_late_semester_crisis`:** Verifiziert, dass `disable_apathy_dampening=True` in akuten Krisenkohorten ($\text{Motivation} < 0{,}20$) die überfachliche und psychosoziale Support-Inanspruchnahme signifikant erhöht.
 5. **`test_v5_berechne_dropout_parameterization`:** Prüft die strenge Monotonie aller Risikofaktoren in `berechne_dropout` sowie die Wirksamkeit benutzerdefinierter `cfg`-Overrides.
 
+### 8.4 Vollständige 8-Universen-Generierung ($N = 50{,}000$) & 34-Schritte-Modell-Benchmark (`outputs/S01_baseline_v5/`)
+
+Im Anschluss an die Unit-Test-Verifikation wurden über `src/deepsupport/runners/run_v5_generation_and_benchmark.py` sämtliche 8 kontrafaktischen Parallelwelten (`universe_A` bis `universe_H`, je $N = 50{,}000$, `seed = 99999`) unter `data_v5_grid/S01_baseline/` generiert (`75,84 Min.`), per DuckDB voraggregiert und anschließend in allen **34 Benchmark-Schritten über sämtliche 6 Modellfamilien** (`220,28 Min.`, `34/34 PASSED`) evaluiert:
+- **Exakte V5.0 Simulator-Ground-Truth ($N = 50{,}000$):** Universum A $= \mathbf{27{,}82\,\%}$ Dropout vs. Universum B $= \mathbf{35{,}47\,\%}$ Dropout ($\text{ARR}_{A \text{ vs. } B} = \mathbf{+7{,}65\,\text{pp}}$, $\text{RR}_{A/B} = \mathbf{0{,}7843}$, $\text{NNT} = 13{,}1$).
+- **Systematischer Performance-Gewinn aller dynamischen Survival- und Sequenzmodelle:** Durch die breitere Motivationsstreuung ($\kappa = 9{,}0$) und die Dämpfung künstlicher Spätsemester-Apathie (`apathy_sem_factor = 0.018`) steigt der C-Index im `Extended Cox (oracle)` um **$+3{,}08\,\text{pp}$** (`0,6980` $\to$ **`0,7288`**), der ROC-AUC der `Keras Exam Survival GRU` um **$+2{,}17\,\text{pp}$** (`0,8791` $\to$ **`0,9008`**), der `PyTorch Exam Survival GRU` auf **`0,9054`** und das $R^2$ des hybriden `32-D Exam-Transformer Embedding + XGBoost` (F5.1) um **$+5{,}39\,\text{pp}$** (`0,7865` $\to$ **`0,8404`**).
+- **Schärferes Deconfounding in allen Kausalschätzern:** Sowohl `Keras Orthogonal DML (oracle)` (`0,8352 / 0,9328 / 0,9321`) als auch `PyTorch Orthogonal DML (oracle)` (`0,9019 / 0,9146 / 0,9209`) identifizieren alle drei Förderkanäle mit 95%-Konfidenzintervallen strikt $< 1{,}0$; auch `PyTorch MSM (oracle)` konvergiert nun in allen drei Kanälen unter $1{,}0$ (`0,9755 / 0,9261 / 0,8485`).
+- Die vollständige Gegenüberstellung aller Modelle zwischen DGP V4.1 und DGP V5.0 ist in **[`modell_gegenueberstellung_v41_vs_v50.md`](../03_evaluations_and_benchmarks/modell_gegenueberstellung_v41_vs_v50.md)** dokumentiert.
+
 ---
 
 ## 9. Verwandte Dokumente
 
 | Dokument | Pfad | Schwerpunkt / Relevanz |
 |:---|:---|:---|
-| **Modell-Gegenüberstellung V4.2.5** | [modell_gegenueberstellung_gesamt_v425.md](../03_evaluations_and_benchmarks/modell_gegenueberstellung_gesamt_v425.md) | Vollständiger Post-Refactor-Benchmark aller 6 Modellfamilien (>25 Modelle in Keras 3 & PyTorch 2.x). |
+| **Modell-Gegenüberstellung V4.1 vs. V5.0** | [modell_gegenueberstellung_v41_vs_v50.md](../03_evaluations_and_benchmarks/modell_gegenueberstellung_v41_vs_v50.md) | **Direkter Head-to-Head-Vergleich aller 8 Universen und 6 Modellfamilien zwischen DGP V4.1 und DGP V5.0.** |
+| **Modell-Gegenüberstellung V4.2.5** | [modell_gegenueberstellung_gesamt_v425.md](../03_evaluations_and_benchmarks/modell_gegenueberstellung_gesamt_v425.md) | Vollständiger Post-Refactor-Benchmark aller 6 Modellfamilien (>25 Modelle in Keras 3 & PyTorch 2.x) auf DGP V4.1. |
 | **Systematische Verteilungsanalyse** | [systematische_verteilungsanalyse_v36_vs_v41.md](systematische_verteilungsanalyse_v36_vs_v41.md) | Empirische $N=50.000$ Evidenz zum selektiven Motivations-Kollaps ($\kappa=20$). |
 | **Kausale Deconfounding-Analyse** | [04_Kausale_Vergleichsanalyse.md](04_Kausale_Vergleichsanalyse.md) | Untersuchung von DML vs. Cox und der Schutzeffekte in Risikogruppen. |
 | **Limitationen & Future Work** | [LIMITATIONEN_FUTURE_WORK.md](../../LIMITATIONEN_FUTURE_WORK.md) | Übergeordnete methodische Grenzen und V5-Entwicklungsziele. |

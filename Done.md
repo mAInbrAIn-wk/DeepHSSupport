@@ -1,11 +1,19 @@
 ---
 created: 2026-09-02
-last_updated: 2026-10-17
+last_updated: 2026-10-18
 status: abgeschlossen
 tags: [done, changelog, meilensteine, v4.2.5, v5.0]
 ---
 
 # ✅ Abgeschlossene Aufgaben
+
+## 2026-10-18: DGP V5.0 8-Universen-Generierung ($N=50.000$), 34-Schritte-Modell-Benchmark & V4.1/V5.0-Gegenüberstellung
+- [x] **Vollständige DGP-V5.0-Generierung ($N = 50.000$, Universen A–H, `data_v5_grid/S01_baseline/`):**
+  - Generierung aller 8 kontrafaktischen Parallelwelten (`seed=99999`) und DuckDB-Voraggregation (`run_v5_generation_and_benchmark.py`).
+  - Exakte Ground Truth V5.0: Universum A $= \mathbf{27{,}82\,\%}$ Dropout vs. Universum B $= \mathbf{35{,}47\,\%}$ Dropout ($\text{ARR}_{A \text{ vs. } B} = \mathbf{+7{,}65\,\text{pp}}$, $\text{RR}_{A/B} = \mathbf{0{,}7843}$, $\text{NNT} = 13{,}1$).
+- [x] **34-Schritte-Komplett-Benchmark auf DGP V5.0 (`outputs/S01_baseline_v5/`, `34/34 PASSED`):**
+  - Training und Evaluierung aller >25 Modelle über sämtliche 6 Modellfamilien (Keras 3 & PyTorch 2.x + Kausaler Ground-Truth & Policy-Targeting Benchmark) in `220,28 Min.` (Peak RAM `2,83 GB`).
+  - Dokumentation der vollständigen Gegenüberstellung **DGP V4.1 vs. DGP V5.0** in [`modell_gegenueberstellung_v41_vs_v50.md`](docs/03_evaluations_and_benchmarks/modell_gegenueberstellung_v41_vs_v50.md).
 
 ## 2026-10-17: Post-Refactor Gesamt-Benchmark (V4.2.5), Kausales Policy-Targeting, DGP V5.0 Rollout & 23 Unit-Tests
 - [x] **Methoden- & Numerik-Refactoring (5 Arbeitspakete AP 1 – AP 5):**

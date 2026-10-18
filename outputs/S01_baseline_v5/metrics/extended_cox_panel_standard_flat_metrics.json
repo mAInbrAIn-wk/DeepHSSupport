@@ -1,0 +1,39 @@
+{
+    "model_type": "extended_cox_prev_gradeblind",
+    "temporal": "prev",
+    "mode": "gradeblind",
+    "Support_HR_Fach_count": 0.9628945870865369,
+    "Support_HR_Uebf_count": 0.9890035620718847,
+    "Support_HR_Psych_count": 0.9583742051570685,
+    "test_c_index": 0.6427226514674359,
+    "test_roc_auc": 0.762490932871134,
+    "fach_partial": {
+        "mean_hr": 0.9628945870865369,
+        "median_hr": 0.9628945870865369
+    },
+    "fach_isolated": {
+        "mean_hr": 0.9628945870865369,
+        "median_hr": 0.9628945870865369
+    },
+    "uebf_partial": {
+        "mean_hr": 0.9890035620718847,
+        "median_hr": 0.9890035620718847
+    },
+    "uebf_isolated": {
+        "mean_hr": 0.9890035620718847,
+        "median_hr": 0.9890035620718847
+    },
+    "psych_partial": {
+        "mean_hr": 0.9583742051570685,
+        "median_hr": 0.9583742051570685
+    },
+    "psych_isolated": {
+        "mean_hr": 0.9583742051570685,
+        "median_hr": 0.9583742051570685
+    },
+    "Support_HR_Fach_tv": 0.9628945870865369,
+    "Support_HR_Uebf_tv": 0.9890035620718847,
+    "Support_HR_Psych_tv": 0.9583742051570685,
+    "HR_fails_prev": 1.0535353201692605,
+    "HR_delta_cp_prev": 0.987897144634044
+}
