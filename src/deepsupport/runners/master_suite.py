@@ -27,7 +27,7 @@ def main():
                         help="Auswahl der Suite: 'fast', 'heavy', oder 'all'")
     parser.add_argument('--data_dir', type=str, default="data_v4_grid/S01_baseline/universe_A",
                         help="Pfad zu den Roh-/Aggregatdaten des Ziel-Universums")
-    parser.add_argument('--output_dir', type=str, default="output_thinkcentre",
+    parser.add_argument('--output_dir', type=str, default="outputs/output_thinkcentre",
                         help="Basis-Verzeichnis fuer Metriken und Reports")
     parser.add_argument('--temporal', type=str, default='prev', choices=['prev', 'cum'],
                         help="Temporaler Modus: 'prev' (Deltas/Vorsemester) oder 'cum' (Historie)")

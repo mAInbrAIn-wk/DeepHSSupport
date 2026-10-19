@@ -30,7 +30,7 @@ def main():
     parser = argparse.ArgumentParser(description="Catch-Up Fast Suite Runner")
     parser.add_argument('--data_dir', type=str, default="data_v4_grid/S01_baseline/universe_A",
                         help="Pfad zu den Eingabedaten")
-    parser.add_argument('--output_dir', type=str, default="output_thinkcentre/fast",
+    parser.add_argument('--output_dir', type=str, default="outputs/output_thinkcentre/fast",
                         help="Ziel-Ausgabeverzeichnis")
     parser.add_argument('--temporal', type=str, default="prev")
     args = parser.parse_args()

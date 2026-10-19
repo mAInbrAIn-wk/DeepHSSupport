@@ -225,12 +225,12 @@ Die vollständige Dokumentation umfasst über 60 Fachdokumente. Für den gezielt
 ### Installation
 ```powershell
 # A) Vollständiges Repository klonen (inkl. LFS-Rohdaten):
-git clone https://github.com/mAInbrAIn-wk/DeepHSSurvial.git
+git clone https://github.com/mAInbrAIn-wk/DeepHSSupport.git
 
 # B) Leichtgewichtiges Klonen (nur Code, Metriken & Dokumentation ohne ~20 GB LFS-CSVs):
 $env:GIT_LFS_SKIP_SMUDGE = "1"
-git clone https://github.com/mAInbrAIn-wk/DeepHSSurvial.git
-cd DeepHSSurvial
+git clone https://github.com/mAInbrAIn-wk/DeepHSSupport.git
+cd DeepHSSupport
 
 # Virtuelle Umgebung aktivieren (Beispiel Windows PowerShell)
 $env:PYTHONPATH = "src"

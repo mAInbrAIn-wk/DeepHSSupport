@@ -410,9 +410,9 @@ def run_benchmark(
             _sync_flat_metrics_from_nested(output_dir, nested_causal)
             if "data_v4_grid" in str(data_dir):
                 lxc_causal_target = (
-                    PROJECT_ROOT / "output_LXC_causal" / "S01_baseline" / "universe_A"
+                    PROJECT_ROOT / "outputs" / "output_LXC_causal" / "S01_baseline" / "universe_A"
                     if m == "standard"
-                    else PROJECT_ROOT / "output_LXC_causal" / "S01_baseline" / "universe_A" / m
+                    else PROJECT_ROOT / "outputs" / "output_LXC_causal" / "S01_baseline" / "universe_A" / m
                 )
                 _sync_flat_metrics_from_nested(lxc_causal_target, nested_causal)
 

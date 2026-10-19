@@ -482,7 +482,7 @@ def run_scenario_universe(
 def main():
     parser = argparse.ArgumentParser(description="DeepSupport PyTorch LXC Runner")
     parser.add_argument("--data_root", type=str, default="data_v4_grid", help="Wurzelverzeichnis der Daten")
-    parser.add_argument("--output_dir", type=str, default="output_LXC", help="Ausgabeverzeichnis")
+    parser.add_argument("--output_dir", type=str, default="outputs/output_LXC", help="Ausgabeverzeichnis")
     parser.add_argument(
         "--scenarios",
         type=str,

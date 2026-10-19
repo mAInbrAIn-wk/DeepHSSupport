@@ -29,6 +29,7 @@ wheels/
 
 # PDF & Archive files
 *.pdf
+!docs/09_presentation/*.pdf
 *.zip
 
 # Environments
@@ -41,28 +42,19 @@ ENV/
 # Output directories & cache
 .gemini/
 
-# Todo
+# Todo & Data Grids
 ToDo.mdarchive/
 data_v4_grid/
-output_dl_v1/
-output_dl_v2/
+data_v5_grid/
+scratch/
+outputs/legacy_local_outputs/
 src/output_dl_v36_clean/
 src/output_v36_clean_rerun/
-output_v4_models/
-output_elitedesk/
-output_v36_sanity/
-output_hypothesis_test_quick/
-output_hypothesis_investigation/
-# output_LXC & outputs: Synchronisiere Metriken und Plots, ignoriere Rohdaten und Binärgewichte
-output_LXC/**/*.csv
-output_LXC/**/models/
-output_LXC/**/*.pt
-output_LXC/**/*.keras
-output_LXC/**/*.h5
+
+# outputs: Synchronisiere Metriken, Logs und Plots, ignoriere Rohdaten und Binärgewichte
 outputs/**/*.csv
+!outputs/legacy_artifacts/*.csv
 outputs/**/models/
 outputs/**/*.pt
 outputs/**/*.keras
 outputs/**/*.h5
-data_v5_grid/
-scratch/

@@ -16,10 +16,10 @@ env/
 
 # Large Datasets & Heavy Artifacts (MUSS via Bind-Mount eingehängt werden!)
 data_v4_grid/
+data_v5_grid/
 src/output_v4_grid/
 src/output_v4_grid_v41/
-output_LXC_causal/
-output_dl/
+outputs/
 archive/
 
 # Temporary data, logs & IDE

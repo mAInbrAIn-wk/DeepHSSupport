@@ -82,3 +82,9 @@ Dieses Verzeichnis bündelt alle architektonischen Entscheidungen (ADRs), Kausal
 ### 7. [08_project_evolution/](08_project_evolution/) — Projektentwicklung & Kritische Bewertung
 - [`DeepSupport_Projektentwicklung.md`](08_project_evolution/DeepSupport_Projektentwicklung.md): Chronologische Rekonstruktion der intellektuellen und technischen Reise — von Data Engineering über Data Analysis und Deep Learning bis zu V4.2. Inkl. Legacy-Submodule.
 - [`DeepSupport_Kritische_Bewertung.md`](08_project_evolution/DeepSupport_Kritische_Bewertung.md): Externe, unparteiische Bewertung von Stärken und Schwächen des Gesamtprojekts (synthetische Datenbasis, Bias-Kontrolle, Modell-Ensemble).
+
+---
+
+### 8. [09_presentation/](09_presentation/) — Präsentation & Abstract
+- [`DeepSupport.pdf`](09_presentation/DeepSupport.pdf) / [`DeepSupport.tex`](09_presentation/DeepSupport.tex): LaTeX-Beamer-Präsentationsfolien des Projekts.
+- [`abstract.md`](09_presentation/abstract.md) & [`Praesentation_Ideen.md`](09_presentation/Praesentation_Ideen.md): Kurzfassung und konzeptionelle Folienstruktur.

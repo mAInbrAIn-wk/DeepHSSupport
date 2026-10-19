@@ -25,7 +25,7 @@ import statsmodels.formula.api as smf
 
 # Ensure project paths: src has precedence over legacy archive
 ROOT_DIR = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT_DIR / "legacy_code" / "archive_scripts"))
+sys.path.insert(0, str(ROOT_DIR / "legacy_projects" / "legacy_code" / "archive_scripts"))
 sys.path.insert(0, str(ROOT_DIR / "src"))
 
 from config import CONFIG

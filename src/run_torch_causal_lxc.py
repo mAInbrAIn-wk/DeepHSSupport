@@ -288,7 +288,7 @@ def build_summary_markdown(all_results: List[Dict[str, Any]], out_file: Path):
 def main():
     parser = argparse.ArgumentParser(description="DeepSupport PyTorch Causal LXC Batch Runner")
     parser.add_argument("--data_grid_dir", type=str, default="data_v4_grid", help="Pfad zum V4-Grid-Verzeichnis")
-    parser.add_argument("--output_dir", type=str, default="output_LXC_causal", help="Zielverzeichnis für Metriken")
+    parser.add_argument("--output_dir", type=str, default="outputs/output_LXC_causal", help="Zielverzeichnis für Metriken")
     parser.add_argument("--scenarios", nargs="+", default=[
         "S01_baseline",
         "S02_supp_half",

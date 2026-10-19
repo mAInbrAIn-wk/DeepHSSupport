@@ -532,7 +532,7 @@ def generate_ablation_summary(results: Dict[str, Dict[str, Any]], out_dir: Path)
 def main():
     parser = argparse.ArgumentParser(description="DeepSupport 2^4 Architecture Ablation Runner")
     parser.add_argument("--data_dir", type=str, default="data_v4_grid/S01_baseline/universe_A", help="Pfad zum Szenario")
-    parser.add_argument("--output_dir", type=str, default="output_ablation_study", help="Ausgabeverzeichnis")
+    parser.add_argument("--output_dir", type=str, default="outputs/output_ablation_study", help="Ausgabeverzeichnis")
     parser.add_argument("--epochs", type=int, default=8, help="Anzahl Epochen pro Run (Standard: 8)")
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size (Standard: 256)")
     parser.add_argument("--runs", nargs="+", default=None, help="Spezifische Runs ausführen (z.B. R0 R1)")

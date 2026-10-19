@@ -107,7 +107,7 @@ def run_heavy_suite(data_dir: Path, output_dir: Optional[Path] = None, temporal:
     data_dir = Path(data_dir)
     if output_dir is None:
         scenario_name = data_dir.parent.name if data_dir.name == 'universe_A' else data_dir.name
-        output_dir = Path("output_v4_heavy") / scenario_name
+        output_dir = Path("outputs/output_v4_heavy") / scenario_name
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     return run_heavy_suite_for_scenario(data_dir, output_dir, epochs_gru=epochs_gru, batch_size=batch_size)
@@ -166,7 +166,7 @@ def main(data_root: Optional[Union[str, Path]] = None,
          batch_size: int = 256):
     
     data_root = Path(data_root) if data_root else Path('data_v4_grid')
-    output_root = Path(output_root) if output_root else Path('output_v4_heavy')
+    output_root = Path(output_root) if output_root else Path('outputs/output_v4_heavy')
     
     if scenarios is None:
         scenarios = ['S01_baseline', 'S07_noise_half', 'S08_noise_double']
@@ -196,7 +196,7 @@ def main(data_root: Optional[Union[str, Path]] = None,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Heavy Deep Suite Runner V4.2")
     parser.add_argument('--data_root', type=str, default='data_v4_grid')
-    parser.add_argument('--output_root', type=str, default='output_v4_heavy')
+    parser.add_argument('--output_root', type=str, default='outputs/output_v4_heavy')
     parser.add_argument('--scenarios', type=str, default='S01_baseline,S07_noise_half,S08_noise_double')
     parser.add_argument('--epochs_gru', type=int, default=20)
     parser.add_argument('--batch_size', type=int, default=256)

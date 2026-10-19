@@ -25,7 +25,7 @@ flowchart TD
             CONT["Container: deepsupport_app\n(Working Dir: /app, shm_size: 2GB)"]
         end
         
-        DATA["LXC Dateisystem\n~/projects/DeepHSSurvial\n(data_v4_grid/, output_LXC_causal/)"]
+        DATA["LXC Dateisystem\n~/projects/DeepHSSupport\n(data_v4_grid/, outputs/)"]
     end
     
     IMG --> CONT
@@ -119,7 +119,7 @@ docker compose version
 Im Projektverzeichnis auf dem LXC:
 
 ```bash
-cd ~/projects/DeepHSSurvial
+cd ~/projects/DeepHSSupport
 git pull
 
 # Image via Docker Compose bauen
